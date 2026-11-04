@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#103b36">
+  <title>S21 點｜012S 單機牌桌</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="tutorial.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="#" id="brand" aria-label="S21 點首頁"><span class="brand-mark">012<span>S</span></span><span class="brand-name">S21 點<small>THE SECOND CHANCE</small></span></a>
+    <nav aria-label="遊戲工具"><button type="button" class="quiet-button" id="tutorial-menu-button">教學</button><button type="button" class="quiet-button" id="rules-button">玩法說明 <span aria-hidden="true">↗</span></button><button type="button" class="quiet-button" id="home-button" hidden>重新設定</button></nav>
+  </header>
+  <main>
+    <section id="setup" class="setup-layout" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span> 012S 原創玩法 · 單機對戰</p>
+        <h1 id="hero-title">跨過 21，<br>重新<span>翻盤。</span></h1>
+        <p class="hero-description">超過不爆牌，扣掉 21 再出發。<br>一張鬼牌，能換走整桌的勝負。</p>
+        <div class="hero-cards" aria-label="22 點扣掉 21，變成 1 點">
+          <div class="show-card dark-card"><span>21</span><b>S</b><small>012S</small></div>
+          <div class="show-card cream-card"><span>A <i>♥</i></span><b>♥</b><small>1 / 11</small></div>
+          <div class="orbit-label">22 <span>↻</span> 1<small>還有下一手</small></div>
+        </div>
+        <div class="hero-footnote"><span>♠</span> 不需登入 <i>／</i> 可離線遊玩 <i>／</i> 1–4 位電腦對手</div>
+      </div>
+      <form id="setup-form" class="setup-panel">
+        <div class="panel-topline"><span>開一桌</span><span class="small-suit">♣</span></div>
+        <h2>今天，和幾位對手過招？</h2>
+        <fieldset><legend>電腦對手</legend><div class="segmented" id="opponent-options">
+          <label><input type="radio" name="opponents" value="1"><span>1 位</span></label>
+          <label><input type="radio" name="opponents" value="2" checked><span>2 位</span></label>
+          <label><input type="radio" name="opponents" value="3"><span>3 位</span></label>
+          <label><input type="radio" name="opponents" value="4"><span>4 位</span></label>
+        </div></fieldset>
+        <fieldset><legend>整場勝利門檻</legend><div class="segmented target-options">
+          <label><input type="radio" name="target" value="5" checked><span>先得 5 分<small>輕鬆過招</small></span></label>
+          <label><input type="radio" name="target" value="10"><span>先得 10 分<small>慢慢較量</small></span></label>
+        </div></fieldset>
+        <label class="extra-option"><span><strong>三鬼特殊規則</strong><small>兩鬼可換鬼 · 集齊三鬼直接贏本局</small></span><input type="checkbox" name="extras" id="extras"><span class="switch" aria-hidden="true"></span></label>
+        <button class="primary-button start-button" type="submit">開始對戰 <span aria-hidden="true">→</span></button>
+        <button class="resume-button" id="resume-button" type="button" hidden>繼續上次的牌局 <span>↗</span></button>
+        <p class="setup-note">每人最多 10 張。最高點數並列，大家各得 1 分。</p>
+        <div class="tutorial-entry"><button type="button" class="secondary-button" id="tutorial-start"><span id="tutorial-start-label">第一次玩？開始教學</span><span aria-hidden="true">↗</span></button><small id="tutorial-entry-note">固定牌面，邊玩邊學；不計入正式比分。</small></div>
+      </form>
+    </section>
+    <section id="game" class="game-layout" hidden aria-label="S21 點牌桌">
+      <div class="match-bar"><div><span class="eyebrow">THE TABLE</span><h1>第 <span id="round-number">1</span> 局 <span id="match-mode"></span></h1></div><div class="match-tools"><label class="speed-control"><input type="checkbox" id="fast-mode"> 快速模式</label><button id="pause-button" class="quiet-button" type="button">暫停</button></div></div>
+      <div id="scoreboard" class="scoreboard" aria-label="累積分數"></div>
+      <div class="table-surface">
+        <div class="table-topline"><span><span class="live-dot"></span> <span id="table-label">輪流抽牌</span></span><span id="deck-count">牌庫 55 張</span></div>
+        <div id="opponents" class="opponents-grid"></div>
+        <div class="center-message"><div class="deck-symbol" aria-hidden="true"><span>S</span></div><div><p id="phase-eyebrow" class="eyebrow">準備發牌</p><h2 id="phase-title">每人輪流抽一張</h2><p id="phase-description">第一張是自己的底牌，第二張起公開。</p></div><span class="table-watermark" aria-hidden="true">S21</span></div>
+        <div id="human-hand" class="human-hand"></div>
+        <section id="result-panel" class="result-panel" hidden aria-label="本局結果"></section>
+      </div>
+      <div id="action-bar" class="action-bar"></div>
+      <details class="event-panel"><summary>牌桌紀錄 <span id="latest-event"></span><span aria-hidden="true">＋</span></summary><ol id="events"></ol></details>
+    </section>
+    <section id="tutorial" class="tutorial-layout" hidden aria-label="互動引導教學">
+      <div class="tutorial-topline"><p class="eyebrow">PRACTICE TABLE · 教學不計分</p><button type="button" class="quiet-button" id="tutorial-exit">返回首頁</button></div>
+      <div id="tutorial-menu">
+        <div class="tutorial-menu-heading"><p class="eyebrow">LEARN BY PLAYING</p><h1 id="tutorial-main-title" tabindex="-1">先練一手，<br>再來翻盤。</h1><p>六段固定情境，親自抽牌、換牌、看結算。電腦會等你完成每一步，不會自行前進；可以跳過、重玩，也能接續上次進度。</p></div>
+        <div class="tutorial-progress-row"><span id="tutorial-progress-label">已完成 0 / 6 段</span><progress id="tutorial-progress" max="6" value="0" aria-label="教學完成進度"></progress></div>
+        <button id="tutorial-resume" type="button" class="primary-button" hidden>繼續上次教學 →</button>
+        <div class="tutorial-chapters" id="tutorial-chapters"></div>
+      </div>
+      <div id="tutorial-lesson" hidden>
+        <div class="tutorial-lesson-topline"><div><p class="eyebrow" id="tutorial-lesson-number">第 1 / 6 段</p><h2 id="tutorial-lesson-title">認識牌桌</h2></div><div class="tutorial-lesson-tools"><button type="button" class="quiet-button" id="tutorial-all">所有教學</button><button type="button" class="quiet-button" id="tutorial-replay">重玩本課</button><button type="button" class="quiet-button" id="tutorial-skip">略過本課</button></div></div>
+        <div class="tutorial-workspace">
+          <aside class="tutorial-coach" aria-label="教學指引"><p class="eyebrow">YOUR NEXT STEP</p><h3 id="tutorial-instructions" tabindex="-1"></h3><p id="tutorial-description"></p><div class="tutorial-equation" id="tutorial-equation" hidden aria-label="點數算式"></div><p class="tutorial-feedback" id="tutorial-feedback" hidden role="status"></p><div class="tutorial-selection" id="tutorial-selection" hidden></div><div class="tutorial-actions" id="tutorial-actions"></div></aside>
+          <div class="table-surface tutorial-board" id="tutorial-board"><div class="table-topline"><span><span class="live-dot"></span> 固定教學牌桌</span><span class="tutorial-board-note" id="tutorial-board-note">電腦已暫停 · 由你逐步操作</span></div><div class="scoreboard tutorial-scoreboard" id="tutorial-scoreboard" aria-label="教學累積分數"></div><div class="opponents-grid" id="tutorial-opponents"></div><div class="center-message"><div class="deck-symbol" aria-hidden="true"><span>S</span></div><div><h3>你與兩位教學對手</h3><p>這裡的牌面與比分不會帶入正式對局。</p></div></div><div id="tutorial-hand-container"></div><div class="tutorial-legend"><span>金色邊框：你的私有底牌</span><span>綠色邊框：提示交換的明牌</span></div><div class="tutorial-log" id="tutorial-log" aria-live="polite"></div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer"><span>012S <span aria-hidden="true">✳</span> S21 點</span><span id="save-status">每一手，都有轉機。</span></footer>
+  <div class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></div>
+  <dialog id="rules-dialog" class="rules-dialog" aria-labelledby="rules-title">
+    <div class="dialog-heading"><div><p class="eyebrow">HOW TO PLAY</p><h2 id="rules-title">一張牌，一次翻盤。</h2></div><button type="button" class="icon-button" id="close-rules" aria-label="關閉玩法說明">×</button></div>
+    <div class="rule-intro">和 1–4 位電腦輪流抽牌。每局最高點者各得 1 分，先達 5 分或 10 分獲勝。多人同局達標，就並列獲勝。</div>
+    <ol class="rule-list">
+      <li><strong>先底牌，再明牌</strong><p>第一圈每人抽一張底牌，只有自己可看；第二圈每人抽一張明牌。之後每回合選擇抽一張，或停牌。</p></li>
+      <li><strong>超過 21，繞一圈</strong><p>2–10 算牌面點數，J、Q、K 算 10。每張 A 可算 1 或 11，取繞回後最高的組合。超過 21 就持續扣 21；22 算 1、42 算 21。鬼牌算 0。</p></li>
+      <li><strong>鬼牌抽到就換</strong><p>明牌鬼牌立即交換任意兩張非鬼牌明牌，可以只交換別人的牌。不能換底牌，不能保留技能，也不補抽。可交換明牌不足兩張時，效果不發動。</p></li>
+      <li><strong>停牌仍可能被拉回來</strong><p>一般回合中，未滿 10 張的停牌者被換牌後，等正常順序輪到自己時可再抽牌或停牌。滿 10 張不能再抽；第 10 張若是鬼牌，先發動再停牌。</p></li>
+      <li><strong>封盤後不能再補牌</strong><p>大家停牌後，只先翻出底牌鬼牌。唯一一張會立即換牌；兩張以上全部抵銷。之後才翻開其餘底牌，比較點數，不比張數；最高者各加 1 分。</p></li>
+    </ol>
+    <section class="extra-rules"><h3>選用 · 三鬼特殊規則</h3><p>同一人持有三張鬼牌（含底牌），立即公開並獨得本局 1 分。第二張公開鬼牌發動時，可以交換其他已公開的鬼牌，包括已使用的鬼牌；換入不再觸發技能。</p><p>底牌鬼牌在封盤翻出時，也能成為第二張公開鬼牌。先判斷多張底牌鬼牌是否抵銷，未抵銷才升級。升級只能在第二張公開的當下使用，底牌仍不可交換。</p></section>
+    <p class="dialog-note">電腦只使用自己的底牌與所有明牌判斷，不會偷看你的底牌或牌庫順序。下一局會全部重洗，並輪替起始玩家。</p>
+    <button type="button" class="primary-button" id="understood-button">懂了，回牌桌</button>
+  </dialog>
+  <dialog id="restart-dialog" class="restart-dialog" aria-labelledby="restart-title"><h2 id="restart-title">離開這場牌局？</h2><p>開始新牌局後，上次的累積分數會被取代。</p><div class="dialog-actions"><button type="button" class="quiet-button" id="cancel-restart">留在牌桌</button><button type="button" class="primary-button" id="confirm-restart">重新設定</button></div></dialog>
+  <script src="engine.js"></script>
+  <script src="tutorial-model.js"></script>
+  <script src="app.js"></script>
+  <script src="tutorial.js"></script>
+</body>
+</html>
