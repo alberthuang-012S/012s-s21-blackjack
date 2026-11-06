@@ -27,7 +27,7 @@ function nextCard(g, c) {
 function act(g, forcedDraw = false) {
   const s = g.state;
   if (['deal', 'settlement'].includes(s.phase)) g.step();
-  else if (s.phase === 'swap') g.swap(...E.chooseSwap(g.view(s.pending.owner)));
+  else if (s.phase === 'swap') { const pair = E.chooseSwap(g.view(s.pending.owner)); if (pair) g.swap(...pair); else g.skipSwap(); }
   else if (s.phase === 'turn') { if (forcedDraw || E.chooseDraw(g.view(s.actor))) g.draw(); else g.stop(); }
   else if (s.phase === 'roundOver') g.nextRound();
   E.assertState(g);
@@ -80,6 +80,44 @@ test('stopped targets below the cap reopen in turn order', () => {
   g.state.players[1].stopped = true; nextCard(g, joker(0)); g.draw();
   g.swap(card(10).id, card(7).id);
   assert.equal(g.state.players[1].stopped, false); assert.equal(g.state.actor, 1);
+});
+test('skipping a joker consumes it without changing cards or reopening stopped players', () => {
+  const g = scenario([[card(2), card(8)], [card(3), card(10)], [card(4), card(7)]]);
+  g.state.players[1].stopped = true; nextCard(g, joker(0)); g.draw();
+  const hands = g.state.players.map(p => p.hand.map(c => c.id)); const remaining = g.state.deck.length;
+  g.skipSwap(); assert.deepEqual(g.state.players.map(p => p.hand.map(c => c.id)), hands);
+  assert(g.state.players[0].hand[2].used); assert(g.state.players[1].stopped);
+  assert.equal(g.state.actor, 2); assert.equal(g.state.deck.length, remaining);
+  assert.throws(() => g.skipSwap()); E.assertState(g);
+});
+test('skipping during initial deal continues dealing and skipping a tenth-card joker stops the owner', () => {
+  const g = new E.Game({ opponents: 2 }, rng());
+  const order = [card(2), card(3), card(4), card(8), card(9), joker(0)];
+  const ids = new Set(order.map(c => c.id)); g.state.deck = [...order, ...E.deck().filter(c => !ids.has(c.id))];
+  for (let i = 0; i < 6; i++) g.step();
+  assert.equal(g.state.phase, 'swap'); g.skipSwap(); assert.equal(g.state.phase, 'turn');
+  assert(g.state.players.every(p => p.hand.length === 2)); E.assertState(g);
+  const pool = E.deck().filter(c => !c.joker), last = scenario([pool.slice(0, 9), pool.slice(9, 11)]);
+  nextCard(last, joker(0)); last.draw(); last.skipSwap();
+  assert(last.state.players[0].stopped); assert.equal(last.state.actor, 1); E.assertState(last);
+});
+test('a sole bottom joker can be skipped before revealing and cannot restart drawing', () => {
+  const g = scenario([[joker(0), card(8)], [card(3), card(10)]]);
+  g.state.players.forEach(p => { p.stopped = true; });
+  g.state.phase = 'settlement'; g.state.settlementStage = 'revealJokers'; g.step();
+  assert(g.state.players[1].hand[0].hidden); g.skipSwap();
+  assert(g.state.players[1].hand[0].hidden); assert(g.state.players.every(p => p.stopped));
+  assert.throws(() => g.draw()); g.step(); assert.equal(g.state.phase, 'roundOver'); E.assertState(g);
+});
+test('upgraded second joker can be skipped and computer prefers keeping cards to a harmful trade', () => {
+  const g = scenario([[card(2), { card: joker(0), used: true }, card(8)], [card(3), { card: joker(2), used: true }, card(10)]], { extras: true });
+  nextCard(g, joker(1)); g.draw(); assert(g.state.pending.allowJoker); g.skipSwap();
+  assert.equal(g.state.phase, 'turn'); assert.equal(g.state.players[0].hand.filter(c => c.joker).length, 2);
+  const ai = scenario([[card(3), { card: joker(0), used: true }, card(4, '♥')], [joker(1), card(7, '♣'), card(9, '♣')]]);
+  ai.state.players.forEach(p => { p.stopped = true; }); ai.state.players[1].hand[0].hidden = false; ai.state.players[1].hand[0].used = true;
+  ai.state.phase = 'swap'; ai.state.settlementStage = 'revealAll';
+  ai.state.pending = { owner: 1, sourceId: joker(1).id, returnPhase: 'settlement', allowJoker: false };
+  assert.equal(E.chooseSwap(ai.view(1)), null); E.assertState(ai);
 });
 test('the tenth card triggers a joker before its owner automatically stops; no replacement draw', () => {
   const pool = E.deck().filter(c => !c.joker);
@@ -155,7 +193,7 @@ test('save restore preserves pending decisions, rejects malformed cards, and AI 
   assert(!('deck' in view)); assert(view.players[1].hand[0].rank === 3);
   assert.equal(view.unknown.length, 51);
   const before = JSON.stringify(view); const pair = E.chooseSwap(view);
-  assert.equal(JSON.stringify(view), before); assert(pair.every(id => g.targets().some(t => t.card.id === id)));
+  assert.equal(JSON.stringify(view), before); assert(!pair || pair.every(id => g.targets().some(t => t.card.id === id)));
   const bad = g.save(); bad.state.players[0].hand[0].rank = 99; assert.throws(() => E.Game.restore(bad));
 });
 test('computer decisions are identical if unseen opponent bottoms and deck cards exchange places', () => {
@@ -165,6 +203,31 @@ test('computer decisions are identical if unseen opponent bottoms and deck cards
   g.state.deck[4] = { id: hidden.id, rank: hidden.rank, suit: hidden.suit, joker: hidden.joker };
   const after = g.view(1); assert.deepEqual(before, after);
   assert.equal(E.chooseDraw(before), E.chooseDraw(after));
+});
+test('computer aims for 21, but judges 19 or 20 against opponents before stopping', () => {
+  const keepTwenty = scenario([[card(2), card(8, '♣'), card(5, '♣')], [card(13, '♦'), card(13, '♣')], [card(3), card(6)]]);
+  assert.equal(E.chooseDraw(keepTwenty.view(1)), false);
+  const keepNineteen = scenario([[card(3), card(11, '♣')], [joker(2), card(5), card(8), card(6, '♣')], [card(4), card(5, '♣'), card(10, '♣'), card(2)]]);
+  keepNineteen.state.players[0].stopped = true;
+  assert.equal(E.score(keepNineteen.state.players[1].hand).value, 19);
+  assert.equal(E.chooseDraw(keepNineteen.view(1)), false);
+  const pursue = scenario([[card(3, '♦'), card(1, '♣'), card(2, '♣'), card(9), card(4)], [card(6, '♥'), card(3), card(11, '♥'), card(1, '♦'), card(12)], [card(2), card(10, '♦')]]);
+  pursue.state.players[2].stopped = true;
+  assert.equal(E.score(pursue.state.players[0].hand).value, 19);
+  assert.equal(E.chooseDraw(pursue.view(0)), true);
+  const twentyOne = scenario([[card(1), card(10)], [card(3), card(9)]]);
+  assert.equal(E.chooseDraw(twentyOne.view(0)), false);
+});
+test('computer takes an available three-joker win without reading other players’ hidden cards', () => {
+  const g = scenario([[card(2), { card: joker(0), used: true }, card(8)], [card(3), { card: joker(2), used: true }, card(10)]], { extras: true });
+  nextCard(g, joker(1)); g.draw();
+  const before = g.view(0), pair = E.chooseSwap(before);
+  assert(pair.includes(joker(2).id));
+  const hidden = g.state.players[1].hand[0], fromDeck = g.state.deck[4];
+  g.state.players[1].hand[0] = { ...fromDeck, hidden: true, used: false };
+  g.state.deck[4] = { id: hidden.id, rank: hidden.rank, suit: hidden.suit, joker: hidden.joker };
+  assert.deepEqual(g.view(0), before); assert.deepEqual(E.chooseSwap(g.view(0)), pair);
+  g.swap(...pair); assert.equal(g.state.result.kind, 'triple'); assert.deepEqual(g.state.result.winners, [0]);
 });
 test('all opponent counts and both rule modes complete full matches without loops, missing cards, or repeated scoring', { timeout: 120000 }, () => {
   for (let opponents = 1; opponents <= 4; opponents++) for (const extras of [false, true]) for (let seed = 1; seed <= 8; seed++) {

@@ -1,0 +1,80 @@
+/* Give the custom illustrated cards enough room to read at a glance. */
+.hero-art-card{padding:0;overflow:hidden;border:1px solid #e2c394}
+.hero-art-card img{display:block;width:100%;height:100%;object-fit:cover}
+:is(#game,#tutorial-lesson) .table-surface{display:flex;flex-direction:column;padding:20px 22px 22px;background:radial-gradient(ellipse at 50% 24%,#2d69544d,transparent 68%),#103c33}
+:is(#game,#tutorial-lesson) .table-topline{order:0;margin-bottom:4px}
+:is(#game,#tutorial-lesson) .opponents-label{order:5;display:flex;justify-content:space-between;align-items:center;gap:12px;margin:4px 2px 10px}
+:is(#game,#tutorial-lesson) .opponents-label strong{font-size:13px;font-weight:650;color:#e5f1e7}
+:is(#game,#tutorial-lesson) .opponents-label span{font-size:11px;color:var(--muted)}
+:is(#game,#tutorial-lesson) .opponents-grid{order:6;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+:is(#game,#tutorial-lesson) .opponents-grid:has(>.opponent:only-child){grid-template-columns:1fr}
+:is(#game,#tutorial-lesson) .opponent{padding:14px;background:#092d27b8;border-color:#ffffff20}
+:is(#game,#tutorial-lesson) .opponent .cards{gap:7px;min-height:96px}
+:is(#game,#tutorial-lesson) .opponent .playing-card{--cw:68px}
+:is(#game,#tutorial-lesson) .opponent .player-heading{margin-bottom:12px}
+:is(#game,#tutorial-lesson) .opponent .player-meta{font-size:11px;margin-top:11px}
+:is(#game,#tutorial-lesson) .human-hand{order:2;padding:20px;background:linear-gradient(135deg,#0a3028eb,#0a342bdf)}
+:is(#game,#tutorial-lesson) .human-hand .cards{display:flex;flex-wrap:wrap;gap:10px;min-height:158px;align-items:flex-end}
+:is(#game,#tutorial-lesson) .human-hand .playing-card{--cw:110px;width:var(--cw);height:calc(var(--cw)*1.42);max-width:none;aspect-ratio:auto}
+:is(#game,#tutorial-lesson) .human-hand .player-heading{margin-bottom:16px}
+:is(#game,#tutorial-lesson) .human-hand .player-meta{margin-top:16px}
+:is(#game,#tutorial-lesson) .center-message{order:1;min-height:95px;padding:18px 12px}
+:is(#game,#tutorial-lesson) .action-bar{order:4;position:sticky;top:8px;bottom:auto;z-index:4;align-self:stretch;margin:14px 0 16px;min-height:76px}
+#game .result-panel{order:3;margin-top:16px}
+:is(#game,#tutorial-lesson) .action-buttons{flex-wrap:wrap;justify-content:flex-end}
+.playing-card[data-view-card]{cursor:zoom-in}
+.playing-card[data-view-card]:hover{box-shadow:0 7px 14px #0005;transform:translateY(-3px)}
+.playing-card[data-view-card]:focus-visible{outline:3px solid var(--gold);outline-offset:3px;z-index:2}
+.playing-card.selected::before{z-index:2}
+#game.inspecting .playing-card.ineligible{opacity:1}
+.card-preview-dialog{width:min(420px,calc(100% - 28px));max-height:calc(100vh - 24px);padding:18px 20px;background:#123b33;border:1px solid #73927e;border-radius:18px;color:var(--cream);box-shadow:0 30px 90px #0009}
+.card-preview-dialog::backdrop{background:#021411c7;backdrop-filter:blur(5px)}
+.card-preview-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.card-preview-heading .eyebrow{font-size:9px;margin:0 0 3px}
+.card-preview-heading h2{font-size:18px;font-weight:600;margin:0}
+.card-preview-image{display:block;width:auto;max-width:100%;max-height:calc(100vh - 170px);margin:0 auto;border-radius:10px;box-shadow:0 10px 35px #0005;object-fit:contain}
+.card-preview-hint{text-align:center;color:var(--muted);font-size:11px;margin:10px 0 0}
+#tutorial-lesson .tutorial-workspace{display:block}
+#tutorial-hand-container{order:2}
+#tutorial-lesson .tutorial-board .human-hand{margin-top:0}
+#tutorial-lesson .center-message h3{font-size:20px;font-weight:550;line-height:1.5;margin:0 0 4px}
+#tutorial-lesson .center-message #tutorial-description{font-size:14px;color:#c6d9cb;line-height:1.75;margin:0}
+#tutorial-lesson .center-message .eyebrow{font-size:9px;color:var(--mint);margin:0 0 5px}
+#tutorial-lesson .tutorial-actions{display:flex;flex-direction:row;flex-wrap:wrap;gap:9px;margin:0}
+#tutorial-lesson .tutorial-actions>button{width:auto;flex:0 1 auto;font-size:14px;min-width:110px}
+#tutorial-lesson .tutorial-equation{font-size:20px;padding:6px 0;margin:0}
+#tutorial-lesson .tutorial-feedback{font-size:12px;margin:5px 0 0;color:var(--gold)}
+#tutorial-lesson .tutorial-selection{font-size:11px;margin:4px 0 0;color:var(--gold)}
+#tutorial-lesson .tutorial-legend{order:7}
+#tutorial-lesson .tutorial-log{order:8}
+@media(max-width:1100px){
+  :is(#game,#tutorial-lesson) .human-hand .playing-card{--cw:96px}
+  :is(#game,#tutorial-lesson) .human-hand .cards{min-height:138px}
+  :is(#game,#tutorial-lesson) .opponent .playing-card{--cw:64px}
+}
+@media(max-width:700px){
+  :is(#game,#tutorial-lesson) .table-surface{display:flex;flex-direction:column;padding:13px 12px 16px}
+  :is(#game,#tutorial-lesson) .table-topline{order:0;margin-bottom:4px}
+  :is(#game,#tutorial-lesson) .center-message{order:1;min-height:80px;padding:12px 2px}
+  :is(#game,#tutorial-lesson) .human-hand{order:2;padding:14px 10px}
+  #game .result-panel{order:3}
+  :is(#game,#tutorial-lesson) .action-bar{order:4;position:sticky;top:8px;bottom:auto;z-index:4;align-self:stretch;margin:10px 0 16px;padding:11px 12px;min-height:0}
+  :is(#game,#tutorial-lesson) .opponents-label{order:5;margin:4px 2px 10px}
+  :is(#game,#tutorial-lesson) .opponents-grid{order:6;grid-template-columns:1fr;gap:9px}
+  :is(#game,#tutorial-lesson) .opponent{padding:11px 10px}
+  :is(#game,#tutorial-lesson) .opponent .cards{gap:6px;min-height:77px}
+  :is(#game,#tutorial-lesson) .opponent .playing-card{--cw:clamp(54px,15vw,64px)}
+  :is(#game,#tutorial-lesson) .opponent .player-name{font-size:12px}
+  :is(#game,#tutorial-lesson) .opponent .player-meta{font-size:10px;margin-top:9px}
+  :is(#game,#tutorial-lesson) .human-hand .cards{gap:8px;min-height:110px}
+  :is(#game,#tutorial-lesson) .human-hand .playing-card{--cw:clamp(70px,22.5vw,96px)}
+  :is(#game,#tutorial-lesson) .human-hand .player-heading{margin-bottom:12px}
+  :is(#game,#tutorial-lesson) .human-hand .player-meta{margin-top:12px}
+  :is(#game,#tutorial-lesson) .action-buttons{width:100%;gap:7px;justify-content:stretch}
+  :is(#game,#tutorial-lesson) .action-buttons>button{flex:1 1 42%;min-width:0}
+  .card-preview-dialog{padding:14px 16px}
+  #tutorial-lesson .center-message h3{font-size:17px}
+  #tutorial-lesson .center-message #tutorial-description{font-size:13px}
+  #tutorial-lesson .tutorial-actions{width:100%;gap:7px}
+  #tutorial-lesson .tutorial-actions>button{flex:1 1 42%;min-width:0}
+}

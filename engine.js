@@ -142,7 +142,7 @@
         s.pending = null; return false;
       }
       s.phase = 'swap';
-      log(s, `${p.name}必須立即換牌${allowJoker ? '，第二鬼可交換其他公開鬼牌' : ''}。`, 'joker');
+      log(s, `${p.name}須立即選擇換牌或不換牌${allowJoker ? '，第二鬼可交換其他公開鬼牌' : ''}。`, 'joker');
       return true;
     }
     targets() {
@@ -167,9 +167,20 @@
       }
       s.pending = null;
       for (const p of s.players) if (this.checkTriple(p.id)) return;
-      s.phase = pending.returnPhase;
-      if (s.phase === 'turn') this.completeTurn(pending.owner);
-      else if (s.phase === 'deal') this.finishDeal();
+      this.finishJokerDecision(pending);
+    }
+    skipSwap() {
+      const s = this.state;
+      if (s.phase !== 'swap' || !s.pending) throw Error('現在不能選擇不換牌');
+      const pending = s.pending;
+      s.pending = null;
+      log(s, `${s.players[pending.owner].name}選擇不換牌，鬼牌已使用。`, 'joker');
+      this.finishJokerDecision(pending);
+    }
+    finishJokerDecision(pending) {
+      this.state.phase = pending.returnPhase;
+      if (this.state.phase === 'turn') this.completeTurn(pending.owner);
+      else if (this.state.phase === 'deal') this.finishDeal();
     }
     completeTurn(owner) {
       const s = this.state, p = s.players[owner];
@@ -251,49 +262,116 @@
   function winChance(value, opponents) {
     return opponents.reduce((p, dist) => p * dist.filter(x => x.value <= value).reduce((a, x) => a + x.chance, 0), 1);
   }
+  // Unseen cards include opposing hole cards, so treat this as an estimate,
+  // never as the actual deck or the identity of another player's hole card.
+  function grouped(cards) {
+    const map = new Map();
+    for (const card of cards) {
+      const rank = card.joker ? 0 : Math.min(card.rank, 10);
+      if (!map.has(rank)) map.set(rank, { card: { rank, joker: rank === 0 }, count: 0 });
+      map.get(rank).count++;
+    }
+    return [...map.values()];
+  }
+  function forecast(player, unknown, mayContinue) {
+    if (!mayContinue || player.hand.length >= 10) return distribution(player.hand, unknown);
+    const groups = grouped(unknown), totals = new Map(), known = player.hand.filter(c => c.rank != null);
+    const hidden = player.hand.some(c => c.rank == null);
+    const add = (value, weight) => totals.set(value, (totals.get(value) || 0) + weight);
+    // Opponents usually aim for 21, with 20 being a plausible stopping point.
+    function visit(hand, slots, depth, weight, remaining) {
+      const value = score(hand).value;
+      if (!remaining || !slots || !depth || value >= 20) { add(value, weight); return; }
+      for (const g of groups) if (g.count) {
+        const probability = g.count / remaining;
+        g.count--; visit([...hand, g.card], slots - 1, depth - 1, weight * probability, remaining - 1); g.count++;
+      }
+    }
+    if (hidden) {
+      for (const g of groups) if (g.count) {
+        const probability = g.count / unknown.length;
+        g.count--; visit([...known, g.card], 10 - player.hand.length, 2, probability, unknown.length - 1); g.count++;
+      }
+    } else visit(known, 10 - player.hand.length, 2, 1, unknown.length);
+    return [...totals].map(([value, chance]) => ({ value, chance }));
+  }
   function chooseDraw(view) {
     const me = view.players[view.owner], current = score(me.hand).value;
     if (me.hand.length >= 10 || current === 21 || !view.deckCount) return false;
-    if (current < 14) return true;
-    const opponents = view.players.filter(p => p.id !== view.owner).map(p => distribution(p.hand, view.unknown));
-    const stop = winChance(current, opponents);
-    const future = view.unknown.reduce((sum, c) => {
-      let utility = winChance(score([...me.hand, c]).value, opponents);
-      if (c.joker) utility += view.config.extras && me.hand.some(x => x.joker) ? .20 : .04;
-      return sum + utility;
-    }, 0) / view.unknown.length;
-    const margin = ({ '穩健': .055, '均衡': .025, '進取': -.015, '算計': .015 })[me.style] ?? .025;
-    return future > stop + margin || (current < 18 && me.hand.length < 6 && stop < .35);
+    const opponents = view.players.filter(p => p.id !== view.owner).map(p => forecast(p, view.unknown, !p.stopped));
+    const groups = grouped(view.unknown), maxDraws = Math.min(3, 10 - me.hand.length, view.deckCount);
+    const margin = ({ '穩健': .012, '均衡': .006, '進取': -.004, '算計': .004 })[me.style] ?? .006;
+    const cache = new Map();
+    function best(hand, depth, remaining) {
+      const value = score(hand).value, stop = winChance(value, opponents);
+      if (!depth || !remaining || value === 21) return stop;
+      const key = hand.map(c => c.joker ? 0 : Math.min(c.rank, 10)).sort((a, b) => a - b).join(',') + '|' + depth;
+      if (cache.has(key)) return cache.get(key);
+      let draw = 0;
+      for (const g of groups) if (g.count) {
+        const p = g.count / remaining; g.count--;
+        const next = [...hand, g.card];
+        const immediate = view.config.extras && g.card.joker && hand.filter(c => c.joker).length === 2;
+        draw += p * (immediate ? 1 : best(next, depth - 1, remaining - 1));
+        g.count++;
+      }
+      const result = Math.max(stop, draw); cache.set(key, result); return result;
+    }
+    const stop = winChance(current, opponents); let draw = 0;
+    for (const g of groups) if (g.count) {
+      const p = g.count / view.unknown.length; g.count--;
+      const immediate = view.config.extras && g.card.joker && me.hand.filter(c => c.joker).length === 2;
+      draw += p * (immediate ? 1 : best([...me.hand, g.card], maxDraws - 1, view.unknown.length - 1));
+      g.count++;
+    }
+    // With no estimated chance of winning in the short lookahead, keep trying
+    // rather than stopping at a low score just because both estimates are zero.
+    if (current < 20 && stop < 1e-9 && draw < 1e-9) return true;
+    return draw > stop + margin * Math.max(stop, .01);
   }
   function chooseSwap(view) {
     const pending = view.pending;
     if (!pending) throw Error('沒有待處理鬼牌');
     const targets = view.players.flatMap(p => p.hand.filter(c => !c.hidden && c.id !== pending.sourceId && (!c.joker || pending.allowJoker)).map(c => ({ owner: p.id, card: c })));
     if (targets.length < 2) return null;
-    let best = [targets[0].card.id, targets[1].card.id], bestValue = -Infinity;
+    let best = null;
     const cache = new Map();
-    function dist(hand) {
-      const key = hand.map(c => c.id || '?').sort().join('|');
-      if (!cache.has(key)) cache.set(key, distribution(hand, view.unknown));
+    function dist(hand, player, reopened) {
+      const active = pending.returnPhase !== 'settlement' && (!player.stopped || reopened);
+      const key = hand.map(c => c.id || '?').sort().join('|') + (active ? 'a' : 's');
+      if (!cache.has(key)) cache.set(key, forecast({ ...player, hand }, view.unknown, active));
       return cache.get(key);
     }
+    function evaluate(hands, changed = []) {
+      const myHand = hands[view.owner];
+      if (view.config.extras && myHand.filter(c => c.joker).length === 3) return 100;
+      // Never hand an opponent a visible three-joker victory. A hidden joker
+      // can also complete their set; account for that risk without seeing it.
+      let survival = 1;
+      if (view.config.extras) for (const p of view.players) if (p.id !== view.owner) {
+        const hand = hands[p.id], visible = hand.filter(c => c.joker).length;
+        if (visible >= 3) return -100;
+        const previouslyVisible = p.hand.filter(c => c.joker).length;
+        if (visible === 2 && previouslyVisible < 2 && hand.some(c => c.rank == null)) {
+          survival *= 1 - view.unknown.filter(c => c.joker).length / view.unknown.length;
+        }
+      }
+      const distributions = hands.map((hand, id) => dist(hand, view.players[id], changed.includes(id) && hand.length < 10));
+      const value = score(myHand).value;
+      let utility = winChance(value, distributions.filter((_, i) => i !== view.owner));
+      for (const p of view.players) if (p.id !== view.owner) {
+        const theirWin = distributions[p.id].reduce((sum, v) => sum + v.chance * winChance(v.value, distributions.filter((_, i) => i !== p.id)), 0);
+        utility -= .16 * theirWin * (p.score + 1) / view.config.target;
+      }
+      return survival * (utility + value / 10000) - (1 - survival);
+    }
+    // Skipping is a real legal move: prefer it over exchanges that offer no gain.
+    let bestValue = evaluate(view.players.map(p => p.hand));
     for (let a = 0; a < targets.length; a++) for (let b = a + 1; b < targets.length; b++) {
       const first = targets[a], second = targets[b];
       if (first.owner === second.owner) continue;
       const hands = view.players.map(p => p.hand.map(c => c.id === first.card.id ? second.card : c.id === second.card.id ? first.card : c));
-      const myHand = hands[view.owner];
-      let utility;
-      if (view.config.extras && myHand.filter(c => c.joker).length === 3) utility = 100;
-      else {
-        const distributions = hands.map(dist);
-        const value = score(myHand).value;
-        utility = winChance(value, distributions.filter((_, i) => i !== view.owner));
-        for (const p of view.players) if (p.id !== view.owner) {
-          const theirWin = distributions[p.id].reduce((sum, v) => sum + v.chance * winChance(v.value, distributions.filter((_, i) => i !== p.id)), 0);
-          utility -= .16 * theirWin * (p.score + 1) / view.config.target;
-        }
-        utility += value / 10000;
-      }
+      const utility = evaluate(hands, [first.owner, second.owner]);
       if (utility > bestValue + 1e-10) { bestValue = utility; best = [first.card.id, second.card.id]; }
     }
     return best;

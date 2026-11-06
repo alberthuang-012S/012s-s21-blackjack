@@ -39,11 +39,16 @@ async function finishChapter(page) {
   try {
     // Entire six-chapter learning path, including interactive wrong-answer recovery.
     const { context, page } = await open(browser);
-    await page.locator('#tutorial-start').click(); await shot(page, 'menu-desktop');
+    await page.locator('#tutorial-start').click();
+    assert(await page.locator('#tutorial-quick').isVisible());
+    assert.equal(await page.locator('#tutorial-go').textContent(), '開始對戰 →');
+    await shot(page, 'quick-desktop'); await page.locator('#tutorial-practice').click(); await shot(page, 'menu-desktop');
     assert.equal(await page.locator('[data-lesson]').count(), 6);
     await page.locator('[data-lesson="0"]').click();
     await act(page, 'deal-bottom'); assert.equal(await page.locator('#tutorial-opponents .card-back').count(), 2);
     await act(page, 'deal-open'); assert.equal((await data(page)).session.game.state.players[0].hand.length, 2);
+    const layout = await page.evaluate(() => ({ hand: document.querySelector('#tutorial-hand-container').getBoundingClientRect().top, actions: document.querySelector('#tutorial-action-bar').getBoundingClientRect().top, opponents: document.querySelector('#tutorial-opponents').getBoundingClientRect().top }));
+    assert(layout.hand < layout.actions && layout.actions < layout.opponents, 'Practice uses the same hand, actions, opponents order as the match.');
     await shot(page, 'lesson-1-private-cards'); await finishChapter(page);
     await act(page, 'next-lesson'); await act(page, 'draw');
     assert.equal(E.score((await data(page)).session.game.state.players[0].hand).value, 4);
@@ -55,13 +60,23 @@ async function finishChapter(page) {
     await shot(page, 'lesson-3-aces'); await finishChapter(page);
     await act(page, 'next-lesson'); await act(page, 'draw-joker');
     assert(await page.locator('[data-tutorial-action="swap"]').isDisabled());
+    await page.locator('[data-tcard="3-7"]').click();
+    await page.locator('[data-tutorial-ui="clear"]').click();
+    assert.equal(await page.locator('#tutorial .playing-card.selected').count(), 0);
+    await page.locator('[data-tcard="3-7"]').click();
+    await page.locator('[data-tutorial-ui="inspect"]').click();
+    await page.locator('#tutorial-opponents [data-view-card="3-10"]').click();
+    assert(await page.locator('#card-preview-dialog').isVisible());
+    await page.locator('#card-preview-close').click(); await page.locator('[data-tutorial-ui="inspect-off"]').click();
+    assert.equal(await page.locator('#tutorial .playing-card.selected').count(), 1);
+    await page.locator('[data-tcard="3-7"]').click();
     await page.locator('[data-tcard="0-9"]').click(); await page.locator('[data-tcard="2-5"]').click();
     await act(page, 'swap'); assert(await page.locator('#tutorial-feedback').isVisible());
     // Clear those choices, then choose the requested targets.
     await page.locator('[data-tcard="0-9"]').click(); await page.locator('[data-tcard="2-5"]').click();
     await page.locator('[data-tcard="3-7"]').click();
     await page.reload(); assert(await page.locator('#setup').isVisible());
-    await page.locator('#tutorial-start').click(); await page.locator('#tutorial-resume').click();
+    await page.locator('#tutorial-start').click(); await page.locator('#tutorial-practice').click(); await page.locator('#tutorial-resume').click();
     assert.equal((await data(page)).session.step, 'select');
     assert.equal(await page.locator('#tutorial .playing-card.selected').count(), 1);
     await page.locator('[data-tcard="3-10"]').click(); await shot(page, 'lesson-4-swap');
@@ -83,17 +98,22 @@ async function finishChapter(page) {
     assert.equal((await data(page)).session.step, 'start');
     await page.locator('#tutorial-skip').click(); assert.equal((await data(page)).session.index, 5);
     await page.locator('#tutorial-exit').click(); assert(await page.locator('#setup').isVisible());
-    await page.reload(); assert.equal(await page.locator('#tutorial-start-label').textContent(), '重玩引導教學');
+    await page.reload(); assert.equal(await page.locator('#tutorial-start-label').textContent(), '第一次玩？快速上手');
     await context.close();
     // Small screens: controls and actual target cards remain usable without overflow.
     for (const width of [320, 390, 768]) {
       const { context, page } = await open(browser, width);
-      await page.locator('#tutorial-start').click(); await shot(page, `menu-${width}`);
+      await page.locator('#tutorial-start').click(); await shot(page, `quick-${width}`);
+      await page.locator('#tutorial-practice').click(); await shot(page, `menu-${width}`);
       await page.locator('[data-lesson="3"]').click(); await act(page, 'draw-joker');
+      await act(page, 'skip-swap'); assert.equal((await data(page)).session.step, 'skipped');
+      await act(page, 'practice-swap'); await act(page, 'draw-joker');
       await page.locator('[data-tcard="3-7"]').click(); await page.locator('[data-tcard="3-10"]').click();
       await shot(page, `exchange-${width}`); await act(page, 'swap'); await finishChapter(page);
       await act(page, 'menu'); await page.locator('[data-lesson="5"]').click();
-      await act(page, 'reveal-joker'); await swap(page); await act(page, 'reveal-all');
+      await act(page, 'reveal-joker'); await act(page, 'skip-swap'); await act(page, 'reveal-skip');
+      assert.deepEqual((await data(page)).session.game.state.result.winners, [1]);
+      await act(page, 'retry-seal'); await act(page, 'reveal-joker'); await swap(page); await act(page, 'reveal-all');
       await shot(page, `settlement-${width}`); await context.close();
     }
     // Opening training from a live CPU turn freezes the exact match and resumes it on exit.
@@ -101,6 +121,10 @@ async function finishChapter(page) {
     const live = await open(browser, 1440, formal.save());
     await live.page.locator('#resume-button').click(); await live.page.locator('#tutorial-menu-button').click();
     const frozen = await live.page.evaluate(key => localStorage.getItem(key), GAME);
+    assert.equal(await live.page.locator('#tutorial-go').textContent(), '回到牌桌 →');
+    await live.page.waitForTimeout(1100);
+    assert.equal(await live.page.evaluate(key => localStorage.getItem(key), GAME), frozen, 'Quick start also freezes the formal match.');
+    await live.page.locator('#tutorial-practice').click();
     await live.page.locator('[data-lesson="1"]').click(); await act(live.page, 'draw');
     await live.page.waitForTimeout(1100);
     assert.equal(await live.page.evaluate(key => localStorage.getItem(key), GAME), frozen, 'The original CPU never progresses during training.');
@@ -108,8 +132,16 @@ async function finishChapter(page) {
     await live.page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).state.eventId !== id, { key: GAME, id: JSON.parse(frozen).state.eventId });
     assert.equal((await live.page.evaluate(key => JSON.parse(localStorage.getItem(key)), GAME)).state.players[0].score, 2);
     await live.context.close();
+    // The main quick-start button opens a new match with the selected setup.
+    const quick = await open(browser, 390);
+    await quick.page.locator('input[name="opponents"][value="1"]').check();
+    await quick.page.locator('input[name="target"][value="10"]').check();
+    await quick.page.locator('#tutorial-start').click(); await quick.page.locator('#tutorial-go').click();
+    const started = await quick.page.evaluate(key => JSON.parse(localStorage.getItem(key)), GAME);
+    assert.equal(started.config.opponents, 1); assert.equal(started.config.target, 10);
+    assert(await quick.page.locator('#game').isVisible()); await quick.context.close();
     assert.deepEqual(errors, []);
-    console.log('PASS: six playable lessons, wrong answers, resume mid-swap, replay/skip, 320–1440 px, and isolated/preserved live match.');
+    console.log('PASS: one-page quick start, direct play, six optional lessons, resume, 320–1440 px, and isolated/preserved live match.');
     console.log('Screenshots: ' + out);
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

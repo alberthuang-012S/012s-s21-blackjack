@@ -79,3 +79,11 @@ test('tutorial sessions do not mutate a formal match, and invalid checkpoints ar
   const corrupt = new T.Session(0).save(); corrupt.game.state.deck[0].rank = 99;
   assert.throws(() => T.Session.restore(corrupt));
 });
+test('the joker and sealed-joker lessons allow skipping and retrying', () => {
+  const normal = new T.Session(3); move(normal, 'draw-joker'); move(normal, 'skip-swap');
+  assert.equal(normal.step, 'skipped'); move(normal, 'practice-swap'); assert.equal(normal.step, 'start');
+  const sealed = new T.Session(5); move(sealed, 'reveal-joker'); move(sealed, 'skip-swap');
+  assert.equal(sealed.step, 'skipped'); move(sealed, 'reveal-skip');
+  assert.deepEqual(sealed.game.state.result.winners, [1]);
+  move(sealed, 'retry-seal'); assert.equal(sealed.step, 'start');
+});

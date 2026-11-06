@@ -1,9 +1,14 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const cardsDir = path.join(__dirname, 'assets', 'cards');
+const artFiles = fs.readdirSync(cardsDir).filter(name => name.endsWith('.webp')).sort();
+if (artFiles.length !== 55) throw new Error(`Expected 55 card face images, found ${artFiles.length}`);
+const art = Object.fromEntries(artFiles.map(name => [path.basename(name, '.webp'), `data:image/webp;base64,${fs.readFileSync(path.join(cardsDir, name)).toString('base64')}`]));
+fs.writeFileSync(path.join(__dirname, 'card-art.js'), `window.S21_CARD_ART=${JSON.stringify(art)};`, 'utf8');
 let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-for (const source of ['style.css', 'tutorial.css']) html = html.replace(`<link rel="stylesheet" href="${source}">`, () => `<style>\n${fs.readFileSync(path.join(__dirname, source), 'utf8')}\n</style>`);
-for (const source of ['engine.js', 'tutorial-model.js', 'app.js', 'tutorial.js']) html = html.replace(`<script src="${source}"></script>`, () => `<script>\n${fs.readFileSync(path.join(__dirname, source), 'utf8').replace(/<\/script/gi, '<\\/script')}\n</script>`);
+for (const source of ['style.css', 'tutorial.css', 'card-art.css', 'table-layout.css', 'quick-tutorial.css']) html = html.replace(`<link rel="stylesheet" href="${source}">`, () => `<style>\n${fs.readFileSync(path.join(__dirname, source), 'utf8')}\n</style>`);
+for (const source of ['engine.js', 'tutorial-model.js', 'card-art.js', 'card-preview.js', 'app.js', 'tutorial.js']) html = html.replace(`<script src="${source}"></script>`, () => `<script>\n${fs.readFileSync(path.join(__dirname, source), 'utf8').replace(/<\/script/gi, '<\\/script')}\n</script>`);
 const out = path.join(__dirname, '..', 'outputs', 'S21點', 'S21點_單機版.html');
 fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, html, 'utf8');
 console.log(out);

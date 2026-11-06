@@ -47,8 +47,10 @@ async function playMatch(page) {
     if (s.phase === 'roundOver') await page.locator('[data-action="next-round"]').click();
     else if (s.phase === 'swap' && s.pending.owner === 0) {
       const g = E.Game.restore(saved), pair = E.chooseSwap(g.view(0));
-      for (const id of pair) await page.locator(`[data-card="${id}"]`).click();
-      await page.locator('[data-action="swap"]').click();
+      if (pair) {
+        for (const id of pair) await page.locator(`[data-card="${id}"]`).click();
+        await page.locator('[data-action="swap"]').click();
+      } else await page.locator('[data-action="skip-swap"]').click();
     } else if (s.phase === 'turn' && s.actor === 0) {
       const g = E.Game.restore(saved), action = E.chooseDraw(g.view(0)) ? 'draw' : 'stop';
       await page.locator(`[data-action="${action}"]`).click();
@@ -99,6 +101,27 @@ async function playMatch(page) {
       await page.waitForFunction(key => ['roundOver', 'matchOver'].includes(JSON.parse(localStorage.getItem(key)).state.phase), STORE);
       await screenshot(page, `result-${width}`); await context.close();
     }
+    // A player may keep all cards, even after selecting one target and reloading.
+    const pass = fixture([[card(2), card(8), joker(0)], [card(3), card(10)]]);
+    pass.state.phase = 'swap'; pass.state.pending = { owner: 0, sourceId: joker(0).id, returnPhase: 'turn', allowJoker: false };
+    for (const width of [320, 1440]) {
+      const { context, page } = await open(browser, pass.save(), { width, height: 1100 });
+      await page.locator('#resume-button').click(); await page.locator(`[data-card="${card(8).id}"]`).click();
+      await screenshot(page, `skip-choice-${width}`); await page.reload(); await page.locator('#resume-button').click();
+      await page.locator('[data-action="skip-swap"]').click();
+      const s = (await state(page)).state;
+      assert.equal(s.players[0].hand[1].id, card(8).id); assert.equal(s.players[1].hand[1].id, card(10).id);
+      assert(s.players[0].hand[2].used); await context.close();
+    }
+    const sealed = fixture([[joker(0), card(8)], [card(3), card(10)]]);
+    sealed.state.players.forEach(p => { p.stopped = true; });
+    sealed.state.players[0].hand[0].hidden = false; sealed.state.players[0].hand[0].used = true;
+    sealed.state.phase = 'swap'; sealed.state.settlementStage = 'revealAll';
+    sealed.state.pending = { owner: 0, sourceId: joker(0).id, returnPhase: 'settlement', allowJoker: false };
+    const seal = await open(browser, sealed.save()); await seal.page.locator('#resume-button').click();
+    await seal.page.locator('[data-action="skip-swap"]').click();
+    await seal.page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).state.phase === 'roundOver', STORE);
+    assert.equal((await state(seal.page)).state.result.kind, 'points'); await seal.context.close();
     // Optional upgrade UI: normal card exchanges for an already-used public joker.
     const special = fixture([[card(2), joker(0), card(8), joker(1)], [card(3), joker(2), card(10)]], true);
     special.state.players[0].score = 4; special.state.phase = 'swap';

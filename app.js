@@ -3,7 +3,7 @@
   const G = window.S21, $ = id => document.getElementById(id);
   const STORE = '012s-s21-game-v1', PREFS = '012s-s21-preferences-v1';
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  let game = null, saved = null, selected = [], paused = false, tutorialOpen = false, timer = null, revision = 0, lastAnnounced = '';
+  let game = null, saved = null, selected = [], paused = false, tutorialOpen = false, inspectMode = false, timer = null, revision = 0, lastAnnounced = '';
   let preferences = { fast: false }, saveWorks = true;
   try { preferences = { ...preferences, ...JSON.parse(localStorage.getItem(PREFS) || '{}') }; } catch (_) { /* Storage is optional. */ }
   $('fast-mode').checked = Boolean(preferences.fast);
@@ -32,7 +32,7 @@
     return -1;
   }
   function automatic() {
-    if (!game || paused || tutorialOpen || $('game').hidden || document.hidden || $('rules-dialog').open || $('restart-dialog').open) return false;
+    if (!game || paused || tutorialOpen || $('game').hidden || document.hidden || $('rules-dialog').open || $('restart-dialog').open || $('card-preview-dialog').open) return false;
     const s = game.state;
     return ['deal', 'settlement'].includes(s.phase) || s.phase === 'turn' && s.actor !== 0 || s.phase === 'swap' && s.pending.owner !== 0;
   }
@@ -48,7 +48,7 @@
         if (['deal', 'settlement'].includes(s.phase)) game.step();
         else if (s.phase === 'swap') {
           const pair = G.chooseSwap(game.view(s.pending.owner));
-          game.swap(pair[0], pair[1]);
+          if (pair) game.swap(pair[0], pair[1]); else game.skipSwap();
         } else if (s.phase === 'turn') {
           if (G.chooseDraw(game.view(s.actor))) game.draw(); else game.stop();
         }
@@ -66,12 +66,12 @@
   }
   function start(config, existing) {
     clearTimer();
-    game = existing || new G.Game(config); paused = false; selected = [];
+    game = existing || new G.Game(config); paused = false; selected = []; inspectMode = false;
     $('setup').hidden = true; $('game').hidden = false; $('home-button').hidden = false;
     window.scrollTo({ top: 0, behavior: 'instant' }); render();
   }
   function returnHome() {
-    clearTimer(); paused = false; selected = [];
+    clearTimer(); paused = false; selected = []; inspectMode = false;
     $('setup').hidden = false; $('game').hidden = true; $('home-button').hidden = true;
     if (game) {
       const form = $('setup-form');
@@ -83,7 +83,7 @@
   function status(p) {
     const s = game.state;
     if (s.result) return s.result.winners.includes(p.id) ? '+1 分' : '本局 +0';
-    if (activeOwner() === p.id && s.phase === 'swap') return '鬼牌換牌';
+    if (activeOwner() === p.id && s.phase === 'swap') return '鬼牌選擇';
     if (p.stopped) return p.hand.length >= 10 ? '滿 10 張' : '已停牌';
     if (activeOwner() === p.id) return s.phase === 'deal' ? '抽牌中' : p.human ? '輪到你' : '思考中';
     return '等待中';
@@ -91,19 +91,21 @@
   function cardHTML(card, owner, index, legalIds) {
     const s = game.state, mine = owner === 0;
     const concealed = card.hidden && !mine, isPrivate = card.hidden && mine;
-    const selecting = s.phase === 'swap' && s.pending.owner === 0;
-    const canSelect = selecting && legalIds.has(card.id), selection = selected.indexOf(card.id);
-    const classes = ['playing-card', concealed ? 'card-back' : card.joker ? 'joker' : '',
+    const selecting = s.phase === 'swap' && s.pending.owner === 0 && !paused;
+    const selectable = selecting && legalIds.has(card.id), canSelect = selectable && !inspectMode, selection = selected.indexOf(card.id);
+    const artSrc = !concealed ? (window.S21_CARD_ART?.[card.id] || `assets/cards/${encodeURIComponent(card.id)}.webp`) : '';
+    const classes = ['playing-card', artSrc ? 'art-card' : '', concealed ? 'card-back' : card.joker && !artSrc ? 'joker' : '',
       !concealed && ['♥', '♦'].includes(card.suit) ? 'red' : '', isPrivate ? 'private' : '',
       card.joker && card.used && !concealed ? 'used' : '', canSelect ? 'targetable' : '',
-      selection >= 0 ? 'selected' : '', selecting && !canSelect ? 'ineligible' : ''].filter(Boolean).join(' ');
+      selection >= 0 ? 'selected' : '', selecting && !selectable ? 'ineligible' : ''].filter(Boolean).join(' ');
     const pendingSource = s.pending?.sourceId === card.id;
     const tag = concealed ? '底牌' : isPrivate ? '私有底牌' : pendingSource ? '發動中' : index === 0 ? '底牌' : card.joker && card.used ? '已使用' : '';
     const display = concealed ? '底牌' : G.rankLabel(card);
-    const label = `${game.state.players[owner].name}的${isPrivate ? '私有底牌 ' : ''}${display}${canSelect ? '，可選擇交換' : ''}`;
+    const label = `${game.state.players[owner].name}的${isPrivate ? '私有底牌 ' : ''}${display}${card.joker && !concealed ? '，0 點' : ''}${canSelect ? '，可選擇交換' : ''}`;
     const corner = card.joker ? 'JOKER' : `${({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' })[card.rank] || card.rank}<span class="card-suit">${escape(card.suit)}</span>`;
-    const content = concealed ? '<span class="card-center">S</span><span class="card-bottom">底牌</span>' : `<span class="card-corner">${corner}</span><span class="card-center">${card.joker ? '鬼' : escape(card.suit)}</span><span class="card-bottom">${tag}</span>`;
+    const content = concealed ? '<span class="card-center">S</span><span class="card-bottom">底牌</span>' : artSrc ? `<img class="card-art" src="${artSrc}" alt="" draggable="false">${card.joker ? '<span class="joker-art-label">鬼牌 · 0點</span>' : ''}${tag ? `<span class="card-art-tag">${escape(tag)}</span>` : ''}` : `<span class="card-corner">${corner}</span><span class="card-center">${card.joker ? '鬼' : escape(card.suit)}</span><span class="card-bottom">${tag}</span>`;
     if (canSelect) return `<button type="button" class="${classes}" data-card="${escape(card.id)}" data-selection="${selection + 1}" aria-label="${escape(label)}" aria-pressed="${selection >= 0}">${content}</button>`;
+    if (!concealed) return `<button type="button" class="${classes}" data-view-card="${escape(card.id)}" data-view-label="${escape(label)}" data-selection="${selection + 1}" aria-label="${escape(label)}，查看大圖">${content}</button>`;
     return `<div class="${classes}" role="img" aria-label="${escape(label)}">${content}</div>`;
   }
   function playerHTML(p, mine, legalIds) {
@@ -127,7 +129,7 @@
     }
     if (paused) return ['PAUSED', '先歇一手。', '按「繼續」回到目前的抽牌或換牌階段。'];
     if (s.phase === 'deal') return ['DEALING', s.dealStep < s.players.length ? '第一圈，先抽底牌。' : '第二圈，明牌上桌。', `${actor.name}依序抽一張，鬼牌會立即處理。`];
-    if (s.phase === 'swap') return [s.pending.allowJoker ? 'JOKER UPGRADE' : 'JOKER EXCHANGE', actor.human ? '選兩張明牌，改寫局勢。' : `${actor.name}正在選擇換牌。`, s.pending.returnPhase === 'settlement' ? '封盤換牌：其餘底牌仍蓋住，完成後不能補牌。' : s.pending.allowJoker ? '第二鬼升級：可選其他公開鬼牌，底牌仍不可交換。' : '可以交換任意兩人的明牌，底牌與鬼牌不能交換。'];
+    if (s.phase === 'swap') return [s.pending.allowJoker ? 'JOKER UPGRADE' : 'JOKER CHOICE', actor.human ? '選擇換牌，或不換牌。' : `${actor.name}正在決定是否換牌。`, s.pending.returnPhase === 'settlement' ? '封盤後可選擇換或不換；其餘底牌仍蓋住，也不能補牌。' : s.pending.allowJoker ? '第二鬼可換其他公開鬼牌，也可不換；底牌不能交換。' : '可交換任意兩張合法明牌，也可直接選擇不換牌。'];
     if (s.phase === 'settlement') return ['TABLE SEALED', '封盤。先看鬼牌，再看底牌。', s.settlementStage === 'revealJokers' ? '所有人已停牌，先同時翻出底牌鬼牌。' : '底牌鬼牌已處理，準備比較最後點數。'];
     return ['YOUR NEXT MOVE', actor.human ? '這一手，繼續還是收手？' : `${actor.name}正在考慮下一手。`, actor.human ? '加一張，也可能繞回。停牌後仍可能被換牌。' : `${actor.style}風格 · 只看自己的底牌與場上明牌。`];
   }
@@ -138,7 +140,8 @@
     if (s.phase === 'swap' && s.pending.owner === 0) {
       const lookup = game.targets();
       const names = selected.map(id => { const t = lookup.find(t => t.card.id === id); return `${s.players[t.owner].name} ${G.rankLabel(t.card)}`; });
-      return `<div class="action-copy"><strong>立即換牌 · 已選 ${selected.length} / 2 張</strong><small>點選牌面選擇，選過的牌可再點一次取消。</small>${names.length ? `<div class="selection-chips">${escape(names.join(' ↔ '))}</div>` : ''}</div><div class="action-buttons"><button type="button" class="secondary-button" data-action="clear" ${!selected.length ? 'disabled' : ''}>重選</button><button type="button" class="primary-button" data-action="swap" ${selected.length !== 2 ? 'disabled' : ''}>確認交換 ↔</button></div>`;
+      if (inspectMode) return '<div class="action-copy"><strong>查看牌面</strong><small>點選牌面看大圖，選好的牌會保留。</small></div><div class="action-buttons"><button type="button" class="primary-button" data-action="inspect-off">返回換牌</button></div>';
+      return `<div class="action-copy"><strong>鬼牌選擇 · 已選 ${selected.length} / 2 張</strong><small>選兩張明牌交換，或直接選擇不換牌；本次機會不能保留。</small>${names.length ? `<div class="selection-chips">${escape(names.join(' ↔ '))}</div>` : ''}</div><div class="action-buttons"><button type="button" class="secondary-button" data-action="inspect">查看大圖</button><button type="button" class="secondary-button" data-action="skip-swap">不換牌</button><button type="button" class="secondary-button" data-action="clear" ${!selected.length ? 'disabled' : ''}>重選</button><button type="button" class="primary-button" data-action="swap" ${selected.length !== 2 ? 'disabled' : ''}>確認交換 ↔</button></div>`;
     }
     if (s.phase === 'turn' && s.actor === 0) return `<div class="action-copy"><strong>輪到你 · 最佳 ${G.score(s.players[0].hand).value} 點</strong><small>還能抽 ${10 - s.players[0].hand.length} 張；每回合只抽一張。</small></div><div class="action-buttons"><button type="button" class="secondary-button" data-action="stop">停牌</button><button type="button" class="primary-button draw-button" data-action="draw">加一張 ＋</button></div>`;
     const who = activeOwner() >= 0 ? s.players[activeOwner()].name : '';
@@ -147,6 +150,9 @@
   function render() {
     if (!game) return;
     const s = game.state;
+    if (!(s.phase === 'swap' && s.pending.owner === 0)) inspectMode = false;
+    $('game').classList.toggle('inspecting', inspectMode);
+    $('opponents-hint').textContent = s.phase === 'swap' && s.pending.owner === 0 && !paused ? (inspectMode ? '點選牌面看大圖' : '點選明牌交換；可切換查看大圖') : '點選明牌可放大查看';
     const focusedCard = document.activeElement?.dataset.card;
     $('round-number').textContent = s.round;
     $('match-mode').textContent = `先得 ${game.config.target} 分${game.config.extras ? ' · 三鬼規則開啟' : ' · 基本規則'}`;
@@ -198,7 +204,10 @@
       if (action === 'draw') game.draw();
       else if (action === 'stop') game.stop();
       else if (action === 'swap') { game.swap(selected[0], selected[1]); selected = []; }
+      else if (action === 'skip-swap') { game.skipSwap(); selected = []; }
       else if (action === 'clear') selected = [];
+      else if (action === 'inspect') inspectMode = true;
+      else if (action === 'inspect-off') inspectMode = false;
       else if (action === 'pause' || action === 'resume') paused = action === 'pause';
       else if (action === 'next-round') { selected = []; game.nextRound(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
       else if (action === 'new-match') { returnHome(); return; }
@@ -230,6 +239,10 @@
     tutorialOpen = event.detail.open;
     clearTimer();
     if (!tutorialOpen && game && !$('game').hidden) schedule();
+  });
+  window.addEventListener('s21:preview-visibility', event => {
+    clearTimer();
+    if (!event.detail.open && game && !$('game').hidden) schedule();
   });
   window.addEventListener('beforeunload', () => { if (game) save(); });
 })();

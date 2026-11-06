@@ -9,7 +9,7 @@
     { title: '認識牌桌', summary: '底牌、明牌與你的最佳點數', symbol: '♠' },
     { title: '抽牌與繞回', summary: '親手將 25 點繞回 4 點', symbol: '↻' },
     { title: 'A 的彈性點數', summary: '比較 1 與 11，取最高結果', symbol: 'A' },
-    { title: '鬼牌立即換牌', summary: '交換兩位電腦的明牌', symbol: '鬼' },
+    { title: '鬼牌選擇換牌', summary: '交換明牌，或選擇不換', symbol: '鬼' },
     { title: '停牌後再回來', summary: '被換牌後，重新決定下一手', symbol: '↩' },
     { title: '封盤與加分', summary: '先處理鬼牌，再翻底牌比點數', symbol: '+1' }
   ];
@@ -56,9 +56,10 @@
       result: copy('1＋11＋9，正好 21 點。', '兩張都算 1 是 11 點；一張 1、一張 11 是 21 點；兩張都算 11 則 31→10 點。正式對局會自動幫你取 21。', [['finish', '學會了，下一課']], { focus: 'point', equation: ['1', '＋11＋9', '＝', '21'] })
     },
     {
-      start: copy('這次會抽到鬼牌。', '鬼牌算 0 點，但抽到時必須立即換牌，不能保留，也不額外補抽。先按「加一張」。', [['draw-joker', '加一張 ＋']], { focus: 'actions' }),
-      select: copy('可以只交換別人的牌。', '請點選電腦 1 的 7♣ 與電腦 2 的 10♣，再確認交換。這次你的數字牌完全不動。底牌與鬼牌不能選。', [['swap', '確認交換 ↔']], { focus: 'targets', expected: ['3-7', '3-10'] }),
-      result: copy('兩位對手的明牌互換了。', '你的點數沒有變，但手上多了一張 0 點鬼牌。一般對局能交換任意兩張合法明牌，不一定要涉及自己的牌；同一人再次抽到鬼牌，仍會立即發動。', [['finish', '學會了，下一課']], { focus: 'board' })
+      start: copy('這次會抽到鬼牌。', '鬼牌算 0 點，抽到時立即選擇換牌或不換牌；效果不能保留，也不額外補抽。先按「加一張」。', [['draw-joker', '加一張 ＋']], { focus: 'actions' }),
+      select: copy('可以只交換別人的牌。', '可點選電腦 1 的 7♣ 與電腦 2 的 10♣，再確認交換；也可以選擇不換牌。底牌與鬼牌不能選。', [['swap', '確認交換 ↔'], ['skip-swap', '不換牌', 'secondary']], { focus: 'targets', expected: ['3-7', '3-10'] }),
+      skipped: copy('你選擇不換牌。', '這張鬼牌仍算已使用，留在手上占一張，算 0 點；本回合結束，不能留到下一回合再用。你也可以重新練習換牌。', [['practice-swap', '再試一次換牌'], ['finish', '學會了，下一課', 'secondary']], { focus: 'hand' }),
+      result: copy('兩位對手的明牌互換了。', '你的點數沒有變，但手上多了一張 0 點鬼牌。一般對局能交換任意兩張合法明牌，也可以選擇不換；同一人再次抽到鬼牌，仍須立即決定。', [['finish', '學會了，下一課']], { focus: 'board' })
     },
     {
       start: copy('18 點，先試著停牌。', '停牌會暫時跳過你的行動，但明牌仍可能被鬼牌交換。先按「停牌」。', [['stop', '停牌']], { focus: 'actions' }),
@@ -68,7 +69,9 @@
     },
     {
       start: copy('所有人停牌，立即封盤。', '這一課有一張底牌鬼牌。先只翻出底牌是鬼牌的牌，其餘底牌保持蓋住；正式計分要等效果全部完成。', [['reveal-joker', '先翻底牌鬼牌']], { focus: 'board' }),
-      select: copy('唯一一張底牌鬼牌，要立即換牌。', '請交換電腦 1 的 7♣ 與電腦 2 的 10♣。其他底牌仍不可交換。注意：現在已封盤，換牌後任何人都不能再補牌。', [['swap', '確認交換 ↔']], { focus: 'targets', expected: ['3-7', '3-10'] }),
+      select: copy('唯一一張底牌鬼牌，立即決定。', '可以交換電腦 1 的 7♣ 與電腦 2 的 10♣，也可以選擇不換牌。其他底牌仍不可交換；封盤後任何人都不能再補牌。', [['swap', '確認交換 ↔'], ['skip-swap', '不換牌', 'secondary']], { focus: 'targets', expected: ['3-7', '3-10'] }),
+      skipped: copy('封盤時選擇不換牌。', '鬼牌已使用，牌面不交換，其餘底牌仍暫時蓋住；封盤後不能補牌。接著翻牌計分。', [['reveal-skip', '翻開其餘底牌']], { focus: 'board' }),
+      'skip-result': copy('不換牌也能順利結算。', '這次電腦 1 以 18 點贏得本局並加 1 分。你可以重試封盤換牌，看看不同張數如何並列加分。', [['retry-seal', '重試封盤換牌'], ['finish', '完成六段教學', 'secondary']], { focus: 'scores' }),
       swapped: copy('封盤換牌完成，不能再抽。', '兩位電腦仍維持停牌，即使都未滿 10 張，也不恢復行動。現在才翻開其他底牌，比較最後點數。', [['reveal-all', '翻開其餘底牌']], { focus: 'board' }),
       tie: copy('都是 21 點，各加 1 分。', '電腦 1 有 3 張牌，電腦 2 有 4 張牌，但都得到 21 點。最高點數並列時，各加 1 分，不比較張數；先達 5 或 10 分贏得整場。', [['cancel-example', '再看多張底牌鬼牌']], { focus: 'scores', equation: ['21', '＝', '21', '各＋1'] }),
       cancelled: copy('兩張底牌鬼牌，同時抵銷。', '第二個情境中，兩位玩家同時翻出底牌鬼牌，全部不發動換牌。直接翻其餘底牌計分；封盤後依然不能補牌。', [['finish', '完成六段教學']], { focus: 'board' })
@@ -119,6 +122,10 @@
       else if (action === 'aces-low' || action === 'aces-high') { this.feedback = action === 'aces-low' ? '兩張都算 1 是 11 點。試試讓其中一張 A 算 11。' : '兩張都算 11 是 31→10 點。每張 A 可以分別取值。'; return false; }
       else if (action === 'aces-mixed') this.step = 'result';
       else if (action === 'draw-joker') { g.draw(); this.step = 'select'; }
+      else if (action === 'skip-swap') { g.skipSwap(); this.selected = []; this.step = 'skipped'; }
+      else if (action === 'practice-swap') { this.game = new Session(3).game; this.step = 'start'; }
+      else if (action === 'reveal-skip') { g.step(); this.step = 'skip-result'; }
+      else if (action === 'retry-seal') { this.game = sealTable(); this.step = 'start'; }
       else if (action === 'swap') {
         if (this.selected.length !== 2 || !this.copy.expected.every(id => this.selected.includes(id))) {
           this.feedback = '這兩張在正式對局可能也能交換；這次請依提示，選電腦 1 的 7♣ 與電腦 2 的 10♣。'; return false;
