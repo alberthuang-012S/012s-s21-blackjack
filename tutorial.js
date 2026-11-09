@@ -4,7 +4,8 @@
   const STORE = '012s-s21-tutorial-v1';
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   let progress = { version: T.VERSION, completed: [], lastLesson: 0, session: null };
-  let session = null, open = false, previous = null, storageWorks = true, inspectCards = false;
+  let session = null, open = false, previous = null, storageWorks = true, inspectCards = false, focusedOpponent = 1;
+  const opponentPanel = window.S21OpponentPanel('tutorial-opponents');
   try {
     const data = JSON.parse(localStorage.getItem(STORE) || 'null');
     if (data?.version === T.VERSION && Array.isArray(data.completed)) {
@@ -28,9 +29,11 @@
     open = true; $('setup').hidden = true; $('game').hidden = true; $('home-button').hidden = true; $('tutorial').hidden = false;
     document.body.classList.add('tutorial-mode');
     $('tutorial-exit').textContent = previous.game ? '返回首頁' : '返回牌桌';
+    $('tutorial-lesson-exit').textContent = previous.game ? '返回首頁' : '返回牌桌';
     showQuick();
   }
   function exit() {
+    opponentPanel.close();
     if (!open) return;
     persist(); open = false; session = null; inspectCards = false; $('tutorial').hidden = true;
     $('setup').hidden = previous.setup; $('game').hidden = previous.game; $('home-button').hidden = previous.home;
@@ -62,8 +65,9 @@
     $('save-status').textContent = previous.game ? '教學不計分 · 進度會保留' : '正式牌局已暫停 · 教學不計分';
   }
   function startLesson(index, resume = false) {
-    session = resume && progress.session ? T.Session.restore(progress.session) : new T.Session(index); inspectCards = false;
+    session = resume && progress.session ? T.Session.restore(progress.session) : new T.Session(index); inspectCards = false; focusedOpponent = 1;
     $('tutorial-quick').hidden = true; $('tutorial-menu').hidden = true; $('tutorial-lesson').hidden = false;
+    window.scrollTo({ top: 0, behavior: 'instant' });
     render(true);
   }
   function cardHTML(card, owner, index) {
@@ -92,7 +96,7 @@
     const visibleBase = p.hand.filter(c => !c.hidden).reduce((n, c) => n + (c.joker ? 0 : Math.min(c.rank, 10)), 0);
     const detail = mine ? `牌面合計 ${value.total}${value.total > 21 ? ` → 繞回 ${value.value} 點` : ''}` : final ? `最後點數 ${value.value}` : hidden ? `明牌基數 ${visibleBase} ＋底牌` : `公開點數 ${value.value}`;
     const meta = `<div class="player-meta"><span>${detail}</span><span>${p.hand.length} / 10 張</span></div>`;
-    return `<article class="${mine ? 'human-hand' : 'opponent'}${active ? ' active' : ''}${final && s.result.winners.includes(p.id) ? ' winner' : ''}" ${mine ? 'id="tutorial-own-hand"' : `aria-label="${escape(p.name)}手牌"`}>${heading}<div class="cards">${p.hand.map((c, i) => cardHTML(c, p.id, i)).join('') || '<span class="tutorial-empty">等待輪流發牌</span>'}</div>${meta}</article>`;
+    return `<article class="${mine ? 'human-hand' : 'opponent'}${!mine && p.id === focusedOpponent ? ' opponent-focused' : ''}${active ? ' active' : ''}${final && s.result.winners.includes(p.id) ? ' winner' : ''}" ${mine ? `id="tutorial-own-hand" data-hand-count="${p.hand.length}"` : `aria-label="${escape(p.name)}手牌"`}>${heading}<div class="cards">${p.hand.map((c, i) => cardHTML(c, p.id, i)).join('') || '<span class="tutorial-empty">等待輪流發牌</span>'}</div>${meta}</article>`;
   }
   function render(focus = false) {
     const c = session.copy, s = session.game.state, lesson = T.LESSONS[session.index];
@@ -111,7 +115,7 @@
     $('tutorial-action-title').textContent = session.completed ? '練習完成' : inspectCards ? '查看牌面' : c.expected ? '鬼牌選擇' : '依照上方提示操作';
     $('tutorial-action-detail').textContent = inspectCards ? '點選牌面看大圖，選好的牌會保留。' : c.expected ? '選擇明牌，或直接選擇不換牌。' : '這是練習牌局，不會影響正式比分。';
     $('tutorial-opponents-hint').textContent = c.expected ? inspectCards ? '點選明牌可放大查看' : '依提示選擇明牌，可切換查看大圖' : '點選明牌可放大查看';
-    const actionButton = a => `<button type="button" class="${a.kind === 'secondary' ? 'secondary-button' : 'primary-button'}" data-tutorial-action="${a.id}" ${a.id === 'swap' && session.selected.length !== 2 ? 'disabled' : ''}>${escape(a.label)}</button>`;
+    const actionButton = a => `<button type="button" class="${a.kind === 'secondary' ? 'secondary-button' : 'primary-button'}" data-tutorial-action="${a.id}" ${a.id === 'swap' && session.selected.length !== 2 ? 'disabled' : ''}>${escape(a.id === 'swap' ? '確認交換' : a.label)}</button>`;
     const lessonActions = session.completed
       ? `<p class="tutorial-success">✓ 已完成第 ${session.index + 1} 段教學</p><button type="button" class="primary-button" data-tutorial-action="${session.index < 5 ? 'next-lesson' : 'exit'}">${session.index < 5 ? '前往下一段 →' : previous.game ? '返回設定 →' : '回原牌局試試 →'}</button><button type="button" class="secondary-button" data-tutorial-action="menu">查看所有教學</button>`
       : c.actions.map(actionButton).join('');
@@ -120,12 +124,16 @@
     $('tutorial-actions').innerHTML = inspectCards
       ? '<button type="button" class="primary-button" data-tutorial-ui="inspect-off">返回換牌</button>'
       : swapChoice && swapAction && skipAction
-        ? `<button type="button" class="secondary-button" data-tutorial-ui="inspect">查看大圖</button>${actionButton(skipAction)}<button type="button" class="secondary-button" data-tutorial-ui="clear" ${session.selected.length ? '' : 'disabled'}>重選</button>${actionButton(swapAction)}`
+        ? `<button type="button" class="secondary-button" data-tutorial-ui="inspect">看大圖</button>${actionButton(skipAction)}<button type="button" class="secondary-button" data-tutorial-ui="clear" ${session.selected.length ? '' : 'disabled'}>重選</button>${actionButton(swapAction)}`
         : lessonActions;
     $('tutorial-scoreboard').innerHTML = s.players.map(p => `<div class="score-chip${p.id === 0 ? ' mine' : ''}"><strong>${escape(p.name)}</strong><span class="score-number">${p.score}<small>教學分數</small></span></div>`).join('');
     $('tutorial-board').dataset.focus = c.focus || '';
     $('tutorial-board').dataset.step = session.step;
-    $('tutorial-opponents').innerHTML = s.players.slice(1).map(playerHTML).join('');
+    const opponents = s.players.slice(1);
+    $('tutorial-opponent-tabs').style.setProperty('--opponents', opponents.length);
+    $('tutorial-opponent-tabs').innerHTML = window.S21OpponentTabs(opponents, focusedOpponent, session.selected, 'data-tutorial-opponent');
+    $('tutorial-opponents').innerHTML = opponents.map(playerHTML).join('');
+    opponentPanel.update(window.S21OpponentTabs(opponents, focusedOpponent, session.selected, 'data-tutorial-panel-opponent'), $('tutorial-action-bar').innerHTML.replace(/\sid="[^"]*"/g, '').replaceAll('data-tutorial-action=', 'data-tutorial-panel-action=').replaceAll('data-tutorial-ui=', 'data-tutorial-panel-ui='), `電腦 ${focusedOpponent} · 完整手牌`);
     $('tutorial-hand-container').innerHTML = playerHTML(s.players[0]);
     $('tutorial-board-note').textContent = s.phase === 'settlement' || s.pending?.returnPhase === 'settlement' ? '已封盤 · 不可補牌' : s.phase === 'swap' ? '鬼牌立即決定換或不換' : s.result ? '此情境已結算 · 不計入正式比分' : '電腦已暫停 · 由你逐步操作';
     $('tutorial-log').textContent = s.events.at(-1)?.message || '教學牌面已準備好。';
@@ -146,6 +154,7 @@
     if (fromSetup) $('setup-form').requestSubmit();
   });
   $('tutorial-exit').addEventListener('click', exit);
+  $('tutorial-lesson-exit').addEventListener('click', exit);
   $('tutorial-all').addEventListener('click', showMenu);
   $('tutorial-resume').addEventListener('click', () => startLesson(progress.lastLesson, true));
   $('tutorial-replay').addEventListener('click', () => startLesson(session.index));
@@ -157,18 +166,26 @@
   $('tutorial').addEventListener('click', event => {
     const chapter = event.target.closest('[data-lesson]');
     if (chapter) { startLesson(Number(chapter.dataset.lesson)); return; }
-    const ui = event.target.closest('[data-tutorial-ui]');
+    const opponent = event.target.closest('[data-tutorial-opponent],[data-tutorial-panel-opponent]');
+    if (opponent && session) {
+      focusedOpponent = Number(opponent.dataset.tutorialOpponent || opponent.dataset.tutorialPanelOpponent); render();
+      opponentPanel.show();
+      return;
+    }
+    const ui = event.target.closest('[data-tutorial-ui],[data-tutorial-panel-ui]');
     if (ui && session) {
       if (ui.disabled) return;
-      if (ui.dataset.tutorialUi === 'clear') { session.selected = []; session.feedback = ''; }
-      else inspectCards = ui.dataset.tutorialUi === 'inspect';
+      const action = ui.dataset.tutorialUi || ui.dataset.tutorialPanelUi;
+      if (action === 'clear') { session.selected = []; session.feedback = ''; }
+      else inspectCards = action === 'inspect';
       render(); return;
     }
     const target = event.target.closest('[data-tcard]');
     if (target && session) { session.select(target.dataset.tcard); render(); return; }
-    const button = event.target.closest('[data-tutorial-action]');
+    const button = event.target.closest('[data-tutorial-action],[data-tutorial-panel-action]');
     if (!button || button.disabled || !session) return;
-    const action = button.dataset.tutorialAction;
+    const action = button.dataset.tutorialAction || button.dataset.tutorialPanelAction;
+    opponentPanel.close();
     if (action === 'next-lesson') { startLesson(session.index + 1); return; }
     if (action === 'menu') { showMenu(); return; }
     if (action === 'exit') { exit(); return; }

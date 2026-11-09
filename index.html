@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="card-art.css">
   <link rel="stylesheet" href="table-layout.css">
   <link rel="stylesheet" href="quick-tutorial.css">
+  <link rel="stylesheet" href="compact-table.css">
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -60,6 +61,7 @@
         <section id="result-panel" class="result-panel" hidden aria-label="本局結果"></section>
         <div id="action-bar" class="action-bar"></div>
         <div class="opponents-label"><strong>對手牌區</strong><span id="opponents-hint">點選明牌可放大查看</span></div>
+        <div class="opponent-tabs" id="opponent-tabs" role="group" aria-label="選擇查看對手的手牌"></div>
         <div id="opponents" class="opponents-grid"></div>
       </div>
       <details class="event-panel"><summary>牌桌紀錄 <span id="latest-event"></span><span aria-hidden="true">＋</span></summary><ol id="events"></ol></details>
@@ -86,7 +88,7 @@
         <div class="tutorial-chapters" id="tutorial-chapters"></div>
       </div>
       <div id="tutorial-lesson" hidden>
-        <div class="tutorial-lesson-topline"><div><p class="eyebrow" id="tutorial-lesson-number">第 1 / 6 段</p><h2 id="tutorial-lesson-title">認識牌桌</h2></div><div class="tutorial-lesson-tools"><button type="button" class="quiet-button" id="tutorial-all">所有教學</button><button type="button" class="quiet-button" id="tutorial-replay">重玩本課</button><button type="button" class="quiet-button" id="tutorial-skip">略過本課</button></div></div>
+        <div class="tutorial-lesson-topline"><div><p class="eyebrow" id="tutorial-lesson-number">第 1 / 6 段</p><h2 id="tutorial-lesson-title">認識牌桌</h2></div><div class="tutorial-lesson-tools"><button type="button" class="quiet-button" id="tutorial-all">所有教學</button><button type="button" class="quiet-button" id="tutorial-replay">重玩本課</button><button type="button" class="quiet-button" id="tutorial-skip">略過本課</button><button type="button" class="quiet-button" id="tutorial-lesson-exit">返回牌桌</button></div></div>
         <div class="tutorial-workspace">
           <div class="scoreboard tutorial-scoreboard" id="tutorial-scoreboard" aria-label="教學累積分數"></div>
           <div class="table-surface tutorial-board" id="tutorial-board">
@@ -95,6 +97,7 @@
             <div id="tutorial-hand-container"></div>
             <div class="action-bar tutorial-control" id="tutorial-action-bar" aria-label="教學操作"><div class="action-copy"><strong id="tutorial-action-title">下一步</strong><small id="tutorial-action-detail">依照上方提示操作</small><div class="tutorial-equation" id="tutorial-equation" hidden aria-label="點數算式"></div><p class="tutorial-feedback" id="tutorial-feedback" hidden role="status"></p><div class="tutorial-selection" id="tutorial-selection" hidden></div></div><div class="action-buttons tutorial-actions" id="tutorial-actions"></div></div>
             <div class="opponents-label"><strong>對手牌區</strong><span id="tutorial-opponents-hint">點選明牌可放大查看</span></div>
+            <div class="opponent-tabs" id="tutorial-opponent-tabs" role="group" aria-label="選擇查看教學對手的手牌"></div>
             <div class="opponents-grid" id="tutorial-opponents"></div>
             <div class="tutorial-legend"><span>金色邊框：你的私有底牌</span><span>綠色邊框：提示交換的明牌</span></div>
             <div class="tutorial-log" id="tutorial-log" aria-live="polite"></div>
@@ -129,6 +132,7 @@
   <script src="tutorial-model.js"></script>
   <script src="card-art.js"></script>
   <script src="card-preview.js"></script>
+  <script src="opponent-tabs.js"></script>
   <script src="app.js"></script>
   <script src="tutorial.js"></script>
 </body>

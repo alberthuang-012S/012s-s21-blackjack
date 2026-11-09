@@ -21,13 +21,27 @@ async function open(browser, width = 1440, saved = null) {
   await page.goto(url); return { context, page };
 }
 async function data(page) { return page.evaluate(key => JSON.parse(localStorage.getItem(key)), TUTORIAL); }
-async function act(page, action) { await page.locator(`[data-tutorial-action="${action}"]`).click(); }
+async function act(page, action) {
+  const attr = await page.locator('#tutorial-opponents-dialog').isVisible() ? 'data-tutorial-panel-action' : 'data-tutorial-action';
+  await page.locator(`[${attr}="${action}"]`).click();
+}
+async function chooseTarget(page, id) {
+  const target = page.locator(`[data-tcard="${id}"]`);
+  if (!await target.isVisible()) {
+    const owner = (await data(page)).session.game.state.players.find(p => p.hand.some(c => c.id === id)).id;
+    const attr = await page.locator('#tutorial-opponents-dialog').isVisible() ? 'data-tutorial-panel-opponent' : 'data-tutorial-opponent';
+    await page.locator(`[${attr}="${owner}"]`).click();
+  }
+  await target.click();
+}
 async function shot(page, name) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name + ' horizontal overflow');
   await page.screenshot({ path: path.join(out, name + '.png'), fullPage: true });
 }
 async function swap(page) {
-  for (const id of ['3-7', '3-10']) await page.locator(`[data-tcard="${id}"]`).click();
+  for (const id of ['3-7', '3-10']) {
+    await chooseTarget(page, id);
+  }
   await act(page, 'swap');
 }
 async function finishChapter(page) {
@@ -97,7 +111,7 @@ async function finishChapter(page) {
     await page.locator('[data-lesson="4"]').click(); await page.locator('#tutorial-replay').click();
     assert.equal((await data(page)).session.step, 'start');
     await page.locator('#tutorial-skip').click(); assert.equal((await data(page)).session.index, 5);
-    await page.locator('#tutorial-exit').click(); assert(await page.locator('#setup').isVisible());
+    await page.locator('#tutorial-lesson-exit').click(); assert(await page.locator('#setup').isVisible());
     await page.reload(); assert.equal(await page.locator('#tutorial-start-label').textContent(), '第一次玩？快速上手');
     await context.close();
     // Small screens: controls and actual target cards remain usable without overflow.
@@ -108,7 +122,10 @@ async function finishChapter(page) {
       await page.locator('[data-lesson="3"]').click(); await act(page, 'draw-joker');
       await act(page, 'skip-swap'); assert.equal((await data(page)).session.step, 'skipped');
       await act(page, 'practice-swap'); await act(page, 'draw-joker');
-      await page.locator('[data-tcard="3-7"]').click(); await page.locator('[data-tcard="3-10"]').click();
+      await chooseTarget(page, '3-7');
+      await page.locator(`[${width<=700?'data-tutorial-panel-opponent':'data-tutorial-opponent'}="2"]`).click();
+      assert.equal(await page.locator('#tutorial .playing-card.selected').count(), 1, 'Switching opponents preserves the first selection.');
+      await page.locator('[data-tcard="3-10"]').click();
       await shot(page, `exchange-${width}`); await act(page, 'swap'); await finishChapter(page);
       await act(page, 'menu'); await page.locator('[data-lesson="5"]').click();
       await act(page, 'reveal-joker'); await act(page, 'skip-swap'); await act(page, 'reveal-skip');
@@ -128,7 +145,7 @@ async function finishChapter(page) {
     await live.page.locator('[data-lesson="1"]').click(); await act(live.page, 'draw');
     await live.page.waitForTimeout(1100);
     assert.equal(await live.page.evaluate(key => localStorage.getItem(key), GAME), frozen, 'The original CPU never progresses during training.');
-    await live.page.locator('#tutorial-exit').click(); assert(await live.page.locator('#game').isVisible());
+    await live.page.locator('#tutorial-lesson-exit').click(); assert(await live.page.locator('#game').isVisible());
     await live.page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key)).state.eventId !== id, { key: GAME, id: JSON.parse(frozen).state.eventId });
     assert.equal((await live.page.evaluate(key => JSON.parse(localStorage.getItem(key)), GAME)).state.players[0].score, 2);
     await live.context.close();

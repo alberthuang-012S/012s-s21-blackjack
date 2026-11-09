@@ -4,7 +4,8 @@
   const STORE = '012s-s21-game-v1', PREFS = '012s-s21-preferences-v1';
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   let game = null, saved = null, selected = [], paused = false, tutorialOpen = false, inspectMode = false, timer = null, revision = 0, lastAnnounced = '';
-  let preferences = { fast: false }, saveWorks = true;
+  let preferences = { fast: false }, saveWorks = true, focusedOpponent = 1, lastActor = -1;
+  const opponentPanel = window.S21OpponentPanel('opponents');
   try { preferences = { ...preferences, ...JSON.parse(localStorage.getItem(PREFS) || '{}') }; } catch (_) { /* Storage is optional. */ }
   $('fast-mode').checked = Boolean(preferences.fast);
   try {
@@ -32,7 +33,7 @@
     return -1;
   }
   function automatic() {
-    if (!game || paused || tutorialOpen || $('game').hidden || document.hidden || $('rules-dialog').open || $('restart-dialog').open || $('card-preview-dialog').open) return false;
+    if (!game || paused || tutorialOpen || opponentPanel.isOpen || $('game').hidden || document.hidden || $('rules-dialog').open || $('restart-dialog').open || $('card-preview-dialog').open) return false;
     const s = game.state;
     return ['deal', 'settlement'].includes(s.phase) || s.phase === 'turn' && s.actor !== 0 || s.phase === 'swap' && s.pending.owner !== 0;
   }
@@ -66,7 +67,7 @@
   }
   function start(config, existing) {
     clearTimer();
-    game = existing || new G.Game(config); paused = false; selected = []; inspectMode = false;
+    game = existing || new G.Game(config); paused = false; selected = []; inspectMode = false; focusedOpponent = 1; lastActor = -1;
     $('setup').hidden = true; $('game').hidden = false; $('home-button').hidden = false;
     window.scrollTo({ top: 0, behavior: 'instant' }); render();
   }
@@ -113,13 +114,14 @@
     const value = G.score(p.hand), visible = p.hand.filter(c => !c.hidden);
     const base = visible.reduce((n, c) => n + (c.joker ? 0 : Math.min(c.rank, 10)), 0);
     const heading = `<div class="player-heading"><span class="player-name">${escape(p.name)}<small>${mine ? 'YOUR HAND' : escape(p.style)}</small></span><span class="hand-header-right">${mine ? `<span class="own-point">${value.value}<small>目前最佳點數</small></span>` : ''}<span class="player-status">${status(p)}</span></span></div>`;
-    const scoreText = mine ? `牌面合計 ${value.total}${value.total > 21 ? ` → 繞回 ${value.value} 點` : ''}${value.aces ? ` · ${value.highAces} 張 A 算 11` : ''}` : s.result ? `<span class="final-point">${value.value}<small> 點</small></span>` : p.hand.some(c => c.hidden) ? `明牌基數 ${base} ＋底牌` : `公開點數 ${value.value}`;
-    const meta = `<div class="player-meta"><span>${scoreText}</span><span>${p.hand.length} / 10 張${mine && !s.result ? ' · 底牌只有你可見' : ''}</span></div>`;
+    const scoreText = mine ? `牌面合計 ${value.total}${value.aces ? ` · ${value.highAces} 張 A 算 11` : ''}` : s.result ? `<span class="final-point">${value.value}<small> 點</small></span>` : p.hand.some(c => c.hidden) ? `明牌基數 ${base} ＋底牌` : `公開點數 ${value.value}`;
+    const meta = `<div class="player-meta"><span>${scoreText}</span><span>${p.hand.length} / 10 張</span></div>`;
     if (mine) {
       $('human-hand').className = `human-hand${active ? ' active' : ''}${winner ? ' winner' : ''}`;
+      $('human-hand').dataset.handCount = p.hand.length;
       return `${heading}<div class="cards">${p.hand.map((c, i) => cardHTML(c, p.id, i, legalIds)).join('')}</div>${meta}`;
     }
-    return `<article class="opponent${active ? ' active' : ''}${winner ? ' winner' : ''}" aria-label="${escape(p.name)}手牌">${heading}<div class="cards">${p.hand.map((c, i) => cardHTML(c, p.id, i, legalIds)).join('')}</div>${meta}</article>`;
+    return `<article class="opponent${p.id === focusedOpponent ? ' opponent-focused' : ''}${active ? ' active' : ''}${winner ? ' winner' : ''}" aria-label="${escape(p.name)}手牌">${heading}<div class="cards">${p.hand.map((c, i) => cardHTML(c, p.id, i, legalIds)).join('')}</div>${meta}</article>`;
   }
   function phaseCopy() {
     const s = game.state, actor = s.players[activeOwner()];
@@ -141,16 +143,27 @@
       const lookup = game.targets();
       const names = selected.map(id => { const t = lookup.find(t => t.card.id === id); return `${s.players[t.owner].name} ${G.rankLabel(t.card)}`; });
       if (inspectMode) return '<div class="action-copy"><strong>查看牌面</strong><small>點選牌面看大圖，選好的牌會保留。</small></div><div class="action-buttons"><button type="button" class="primary-button" data-action="inspect-off">返回換牌</button></div>';
-      return `<div class="action-copy"><strong>鬼牌選擇 · 已選 ${selected.length} / 2 張</strong><small>選兩張明牌交換，或直接選擇不換牌；本次機會不能保留。</small>${names.length ? `<div class="selection-chips">${escape(names.join(' ↔ '))}</div>` : ''}</div><div class="action-buttons"><button type="button" class="secondary-button" data-action="inspect">查看大圖</button><button type="button" class="secondary-button" data-action="skip-swap">不換牌</button><button type="button" class="secondary-button" data-action="clear" ${!selected.length ? 'disabled' : ''}>重選</button><button type="button" class="primary-button" data-action="swap" ${selected.length !== 2 ? 'disabled' : ''}>確認交換 ↔</button></div>`;
+      return `<div class="action-copy"><strong>鬼牌選擇 · 已選 ${selected.length} / 2 張</strong><small>選兩張明牌交換，或選擇不換；機會不能保留。</small>${names.length ? `<div class="selection-chips">${escape(names.join(' ↔ '))}</div>` : ''}</div><div class="action-buttons"><button type="button" class="secondary-button" data-action="inspect">看大圖</button><button type="button" class="secondary-button" data-action="skip-swap">不換牌</button><button type="button" class="secondary-button" data-action="clear" ${!selected.length ? 'disabled' : ''}>重選</button><button type="button" class="primary-button" data-action="swap" ${selected.length !== 2 ? 'disabled' : ''}>確認交換</button></div>`;
     }
     if (s.phase === 'turn' && s.actor === 0) return `<div class="action-copy"><strong>輪到你 · 最佳 ${G.score(s.players[0].hand).value} 點</strong><small>還能抽 ${10 - s.players[0].hand.length} 張；每回合只抽一張。</small></div><div class="action-buttons"><button type="button" class="secondary-button" data-action="stop">停牌</button><button type="button" class="primary-button draw-button" data-action="draw">加一張 ＋</button></div>`;
     const who = activeOwner() >= 0 ? s.players[activeOwner()].name : '';
     return `<div class="action-copy"><strong><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>${s.phase === 'settlement' ? '正在處理封盤結算' : s.phase === 'deal' ? '每人依序抽一張牌' : `${escape(who)}的回合`}</strong><small>你的底牌不會公開給電腦。可以展開下方牌桌紀錄。</small></div><div class="action-buttons"><button type="button" class="secondary-button" data-action="pause">暫停</button></div>`;
   }
+  function renderOpponents() {
+    const players = game.state.players.slice(1);
+    const legalIds = new Set(game.targets().map(t => t.card.id));
+    $('opponent-tabs').style.setProperty('--opponents', players.length);
+    $('opponent-tabs').innerHTML = window.S21OpponentTabs(players, focusedOpponent, selected, 'data-opponent');
+    $('opponents').style.setProperty('--opponents', players.length);
+    $('opponents').innerHTML = players.map(p => playerHTML(p, false, legalIds)).join('');
+    opponentPanel.update(window.S21OpponentTabs(players, focusedOpponent, selected, 'data-panel-opponent'), actionHTML().replaceAll('data-action=', 'data-panel-action='), `${players.find(p => p.id === focusedOpponent)?.name || '對手'} · 完整手牌`);
+  }
   function render() {
     if (!game) return;
     const s = game.state;
+    if (!(s.phase === 'swap' && s.pending.owner === 0) && selected.length) opponentPanel.close();
     if (!(s.phase === 'swap' && s.pending.owner === 0)) inspectMode = false;
+    $('game').dataset.phase = s.phase;
     $('game').classList.toggle('inspecting', inspectMode);
     $('opponents-hint').textContent = s.phase === 'swap' && s.pending.owner === 0 && !paused ? (inspectMode ? '點選牌面看大圖' : '點選明牌交換；可切換查看大圖') : '點選明牌可放大查看';
     const focusedCard = document.activeElement?.dataset.card;
@@ -160,8 +173,10 @@
     $('scoreboard').innerHTML = s.players.map(p => `<div class="score-chip${p.human ? ' mine' : ''}"><strong>${escape(p.name)}<small>${p.human ? 'YOU' : escape(p.style)}</small></strong><span class="score-number">${p.score}<small>/ ${game.config.target}</small></span></div>`).join('');
     const legalIds = new Set(game.targets().map(t => t.card.id));
     selected = selected.filter(id => legalIds.has(id));
-    $('opponents').style.setProperty('--opponents', game.config.opponents);
-    $('opponents').innerHTML = s.players.slice(1).map(p => playerHTML(p, false, legalIds)).join('');
+    const actor = activeOwner();
+    if (actor > 0 && actor !== lastActor) focusedOpponent = actor;
+    lastActor = actor;
+    renderOpponents();
     $('human-hand').innerHTML = playerHTML(s.players[0], true, legalIds);
     $('deck-count').textContent = `牌庫 ${s.deck.length} 張`;
     $('table-label').textContent = s.result ? '本局已結束' : s.phase === 'settlement' || s.pending?.returnPhase === 'settlement' ? '已封盤 · 不能加牌' : '輪流抽牌 · 最多 10 張';
@@ -190,6 +205,13 @@
   });
   $('resume-button').addEventListener('click', () => { if (saved) start(null, G.Game.restore(saved)); });
   document.addEventListener('click', event => {
+    const opponent = event.target.closest('[data-opponent],[data-panel-opponent]');
+    if (opponent && game && !$('game').hidden) {
+      focusedOpponent = Number(opponent.dataset.opponent || opponent.dataset.panelOpponent);
+      renderOpponents();
+      opponentPanel.show();
+      return;
+    }
     const card = event.target.closest('[data-card]');
     if (card && game?.state.phase === 'swap' && game.state.pending.owner === 0 && !paused) {
       const id = card.dataset.card;
@@ -197,14 +219,15 @@
       else if (selected.length < 2) selected.push(id);
       render(); return;
     }
-    const button = event.target.closest('[data-action]');
+    const button = event.target.closest('[data-action],[data-panel-action]');
     if (!button || button.disabled || !game) return;
     try {
-      const action = button.dataset.action;
+      const action = button.dataset.action || button.dataset.panelAction;
+      if (['draw','stop','next-round','new-match','resume','pause'].includes(action)) opponentPanel.close();
       if (action === 'draw') game.draw();
       else if (action === 'stop') game.stop();
-      else if (action === 'swap') { game.swap(selected[0], selected[1]); selected = []; }
-      else if (action === 'skip-swap') { game.skipSwap(); selected = []; }
+      else if (action === 'swap') { game.swap(selected[0], selected[1]); selected = []; opponentPanel.close(); }
+      else if (action === 'skip-swap') { game.skipSwap(); selected = []; opponentPanel.close(); }
       else if (action === 'clear') selected = [];
       else if (action === 'inspect') inspectMode = true;
       else if (action === 'inspect-off') inspectMode = false;
@@ -244,5 +267,6 @@
     clearTimer();
     if (!event.detail.open && game && !$('game').hidden) schedule();
   });
+  window.addEventListener('s21:opponent-panel', () => { clearTimer(); if (game) schedule(); });
   window.addEventListener('beforeunload', () => { if (game) save(); });
 })();

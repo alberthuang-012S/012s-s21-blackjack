@@ -26,6 +26,19 @@ function fixture(hands, extras = false) {
   return g;
 }
 async function state(page) { return page.evaluate(key => JSON.parse(localStorage.getItem(key)), STORE); }
+async function selectCard(page, id) {
+  const card = page.locator(`[data-card="${id}"]`);
+  if (!await card.isVisible()) {
+    const owner = (await state(page)).state.players.find(p => p.hand.some(c => c.id === id)).id;
+    const attribute = await page.locator('#opponents-dialog').isVisible() ? 'data-panel-opponent' : 'data-opponent';
+    await page.locator(`[${attribute}="${owner}"]`).click();
+  }
+  await card.click();
+}
+async function swapAction(page) {
+  const attribute = await page.locator('#opponents-dialog').isVisible() ? 'data-panel-action' : 'data-action';
+  await page.locator(`[${attribute}="swap"]`).click();
+}
 async function overflow(page, name) { assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name); }
 async function open(browser, saved, viewport = { width: 1440, height: 1100 }) {
   const context = await browser.newContext({ viewport, reducedMotion: 'reduce' });
@@ -88,16 +101,16 @@ async function playMatch(page) {
       assert.equal(await page.locator('#human-hand .playing-card').count(), 10);
       assert(await page.locator('[data-action="swap"]').isDisabled());
       const targets = g.targets();
-      await page.locator(`[data-card="${targets[0].card.id}"]`).click();
-      await page.locator(`[data-card="${targets[targets.length - 1].card.id}"]`).click();
+      await selectCard(page, targets[0].card.id);
+      await selectCard(page, targets[targets.length - 1].card.id);
       assert(!(await page.locator('[data-action="swap"]').isDisabled()));
       await screenshot(page, `ten-cards-swap-${width}`);
       await page.reload(); await page.locator('#resume-button').click();
       assert.equal((await state(page)).state.phase, 'swap');
       assert.equal(await page.locator('.playing-card.selected').count(), 0);
-      await page.locator(`[data-card="${targets[0].card.id}"]`).click();
-      await page.locator(`[data-card="${targets[targets.length - 1].card.id}"]`).click();
-      await page.locator('[data-action="swap"]').click();
+      await selectCard(page, targets[0].card.id);
+      await selectCard(page, targets[targets.length - 1].card.id);
+      await swapAction(page);
       await page.waitForFunction(key => ['roundOver', 'matchOver'].includes(JSON.parse(localStorage.getItem(key)).state.phase), STORE);
       await screenshot(page, `result-${width}`); await context.close();
     }
